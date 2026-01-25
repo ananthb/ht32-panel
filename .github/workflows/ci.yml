@@ -82,7 +82,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Run tests
-        run: devenv shell test
+        run: devenv shell run-tests
 
   build:
     name: Build
