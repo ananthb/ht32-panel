@@ -1,0 +1,37 @@
+# HT32 Panel Daemon Configuration
+
+# Server listen address
+listen = "0.0.0.0:8686"
+
+# Path to theme configuration
+theme = "themes/default.toml"
+
+# Render loop poll interval (milliseconds)
+poll = 500
+
+# Display refresh rate (milliseconds)
+refresh = 1600
+
+# Heartbeat interval (milliseconds)
+heartbeat = 60000
+
+# LCD Configuration
+[lcd]
+# Device path or "auto" for auto-detection by VID:PID
+device = "auto"
+
+# LED Configuration
+[led]
+# Serial port path for LED controller (CH340)
+device = "/dev/ttyUSB0"
+# Theme: 1=rainbow, 2=breathing, 3=colors, 4=off, 5=auto
+theme = 2
+# Intensity (1-5)
+intensity = 3
+# Speed (1-5)
+speed = 3
+
+# Canvas Configuration
+[canvas]
+width = 320
+height = 170

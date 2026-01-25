@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=HT32 Panel
+GenericName=Display Controller
+Comment=LCD and LED control for mini PCs
+Exec=ht32-panel-applet
+Icon=org.ht32panel.Daemon
+Categories=System;Monitor;Settings;
+Keywords=display;lcd;led;panel;
+StartupNotify=false
+Terminal=false

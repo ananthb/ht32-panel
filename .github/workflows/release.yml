@@ -1,0 +1,223 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Install devenv
+        run: nix profile install nixpkgs#devenv
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Add Rust target
+        run: devenv shell -- rustup target add ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Build release
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          devenv shell -- cargo build --release --workspace --target ${{ matrix.target }}
+
+      - name: Package binaries
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/ht32paneld dist/ 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/ht32panelctl dist/ 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/ht32-panel-applet dist/ 2>/dev/null || true
+          cp -r config dist/
+          cp -r themes dist/
+          tar -czvf ht32-panel-${{ github.ref_name }}-${{ matrix.target }}.tar.gz -C dist .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ht32-panel-${{ matrix.target }}
+          path: ht32-panel-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+
+  build-appimage:
+    name: Build AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Install devenv
+        run: nix profile install nixpkgs#devenv
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-appimage-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-appimage-cargo-
+
+      - name: Build release
+        run: devenv shell -- cargo build --release --workspace
+
+      - name: Install AppImage tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Create AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
+          mkdir -p AppDir/usr/share/ht32-panel
+
+          cp target/release/ht32paneld AppDir/usr/bin/
+          cp target/release/ht32panelctl AppDir/usr/bin/
+          cp target/release/ht32-panel-applet AppDir/usr/bin/
+          cp -r config themes AppDir/usr/share/ht32-panel/
+
+          cp packaging/org.ht32panel.Daemon.desktop AppDir/
+          cp packaging/org.ht32panel.Daemon.desktop AppDir/usr/share/applications/
+          cp packaging/org.ht32panel.Daemon.svg AppDir/
+          cp packaging/org.ht32panel.Daemon.svg AppDir/usr/share/icons/hicolor/scalable/apps/
+          cp packaging/appimage/AppRun AppDir/
+          chmod +x AppDir/AppRun
+
+      - name: Build AppImage
+        run: |
+          ./appimagetool-x86_64.AppImage AppDir ht32-panel-${{ github.ref_name }}-x86_64.AppImage
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ht32-panel-appimage
+          path: ht32-panel-${{ github.ref_name }}-x86_64.AppImage
+
+  build-flatpak:
+    name: Build Flatpak
+    runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: flatpak-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            flatpak-cargo-
+
+      - name: Generate cargo sources
+        run: |
+          pip install toml aiohttp
+          python3 -c "
+          import json
+          import subprocess
+          result = subprocess.run(['cargo', 'metadata', '--format-version=1'], capture_output=True, text=True)
+          # Generate empty sources for now - flatpak-cargo-generator would be used in production
+          print('[]')
+          " > packaging/flatpak/cargo-sources.json
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/org.ht32panel.Daemon.yml
+          bundle: ht32-panel-${{ github.ref_name }}.flatpak
+          cache-key: flatpak-builder-${{ hashFiles('packaging/flatpak/org.ht32panel.Daemon.yml') }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ht32-panel-flatpak
+          path: ht32-panel-${{ github.ref_name }}.flatpak
+
+  release:
+    name: Create Release
+    needs: [build-linux, build-appimage, build-flatpak]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "## What's Changed" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> CHANGELOG.md 2>/dev/null || echo "- Initial release" >> CHANGELOG.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG.md
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.AppImage
+            artifacts/**/*.flatpak
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

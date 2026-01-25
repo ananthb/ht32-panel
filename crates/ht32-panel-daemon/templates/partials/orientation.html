@@ -1,0 +1,12 @@
+<form hx-post="/orientation" hx-target="#orientation" hx-swap="innerHTML">
+    <div class="controls">
+        <button type="submit" name="orientation" value="landscape"
+                class="btn{% if current == "landscape" %} active{% endif %}">Landscape</button>
+        <button type="submit" name="orientation" value="portrait"
+                class="btn{% if current == "portrait" %} active{% endif %}">Portrait</button>
+        <button type="submit" name="orientation" value="landscape-upside-down"
+                class="btn{% if current == "landscape-upside-down" %} active{% endif %}">Landscape (Flipped)</button>
+        <button type="submit" name="orientation" value="portrait-upside-down"
+                class="btn{% if current == "portrait-upside-down" %} active{% endif %}">Portrait (Flipped)</button>
+    </div>
+</form>

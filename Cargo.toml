@@ -1,0 +1,58 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ht32-panel-hw",
+    "crates/ht32-panel-daemon",
+    "crates/ht32-panel-cli",
+    "crates/ht32-panel-applet",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0"
+authors = ["HT32 Panel Contributors"]
+repository = "https://github.com/ananthb/ht32-panel"
+
+[workspace.dependencies]
+# Hardware
+hidapi = "2"
+tokio-serial = "5"
+
+# D-Bus
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+
+# System tray
+ksni = "0.2"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# HTML templating
+askama = "0.15"
+
+# Graphics
+image = "0.25"
+tiny-skia = "0.11"
+fontdue = "0.9"
+png = "0.17"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"

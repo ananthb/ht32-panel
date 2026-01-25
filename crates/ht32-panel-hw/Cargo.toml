@@ -1,0 +1,13 @@
+[package]
+name = "ht32-panel-hw"
+description = "Hardware abstraction library for HT32-based LCD and LED control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hidapi = { workspace = true }
+tokio-serial = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

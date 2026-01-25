@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HT32 Panel</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        h1 { margin-bottom: 1rem; color: #00d4ff; }
+        h2 { margin: 1rem 0 0.5rem; color: #aaa; font-size: 0.9rem; text-transform: uppercase; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .preview {
+            text-align: center;
+            background: #0f0f23;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .preview img {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #333;
+            border-radius: 4px;
+        }
+        .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .btn {
+            background: #0f3460;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn:hover { background: #1a508b; }
+        .btn.active { background: #00d4ff; color: #000; }
+        .slider-group { margin: 0.5rem 0; }
+        .slider-group label { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; }
+        .slider-group input[type="range"] { width: 100%; }
+        .slider-value { text-align: right; font-size: 0.8rem; color: #888; }
+        .status {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        .status.connected { background: #0a3d0a; color: #4caf50; }
+        .status.disconnected { background: #3d0a0a; color: #f44336; }
+        .widget-list { list-style: none; }
+        .widget-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: #0f3460;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+        .widget-item .btn { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        select {
+            background: #0f3460;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .htmx-request { opacity: 0.5; }
+        .flash { animation: flash 0.3s; }
+        @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HT32 Panel</h1>
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

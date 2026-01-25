@@ -1,0 +1,28 @@
+[package]
+name = "ht32-panel-daemon"
+description = "Daemon with web UI for HT32 panel control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ht32paneld"
+path = "src/main.rs"
+
+[dependencies]
+ht32-panel-hw = { path = "../ht32-panel-hw" }
+tokio = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+image = { workspace = true }
+tiny-skia = { workspace = true }
+fontdue = { workspace = true }
+png = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+zbus = { workspace = true }
+askama = { workspace = true }

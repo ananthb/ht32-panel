@@ -1,0 +1,30 @@
+<form hx-post="/led" hx-target="#led-controls" hx-swap="innerHTML">
+    <div class="controls" style="margin-bottom: 1rem;">
+        <button type="submit" name="theme" value="1"
+                class="btn{% if theme == 1 %} active{% endif %}">Rainbow</button>
+        <button type="submit" name="theme" value="2"
+                class="btn{% if theme == 2 %} active{% endif %}">Breathing</button>
+        <button type="submit" name="theme" value="3"
+                class="btn{% if theme == 3 %} active{% endif %}">Colors</button>
+        <button type="submit" name="theme" value="4"
+                class="btn{% if theme == 4 %} active{% endif %}">Off</button>
+        <button type="submit" name="theme" value="5"
+                class="btn{% if theme == 5 %} active{% endif %}">Auto</button>
+    </div>
+    <input type="hidden" name="intensity" value="{{ intensity }}">
+    <input type="hidden" name="speed" value="{{ speed }}">
+</form>
+
+<form hx-post="/led" hx-target="#led-controls" hx-swap="innerHTML" hx-trigger="change">
+    <input type="hidden" name="theme" value="{{ theme }}">
+    <div class="slider-group">
+        <label>Intensity: <span class="slider-value">{{ intensity }}</span></label>
+        <input type="range" name="intensity" min="1" max="5" value="{{ intensity }}"
+               oninput="this.previousElementSibling.querySelector('.slider-value').textContent = this.value">
+    </div>
+    <div class="slider-group">
+        <label>Speed: <span class="slider-value">{{ speed }}</span></label>
+        <input type="range" name="speed" min="1" max="5" value="{{ speed }}"
+               oninput="this.previousElementSibling.querySelector('.slider-value').textContent = this.value">
+    </div>
+</form>

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div id="status" hx-get="/status" hx-trigger="load, every 5s" hx-swap="innerHTML">
+        Loading...
+    </div>
+</div>
+
+<div class="card preview">
+    <h2>Display Preview</h2>
+    <img id="lcd-preview" src="/lcd.png" alt="LCD Preview"
+         hx-get="/lcd.png" hx-trigger="every 2s" hx-swap="outerHTML"
+         hx-on::after-request="this.src='/lcd.png?t=' + Date.now()">
+</div>
+
+<div class="card">
+    <h2>Orientation</h2>
+    <div id="orientation" hx-get="/orientation" hx-trigger="load" hx-swap="innerHTML">
+        Loading...
+    </div>
+</div>
+
+<div class="card">
+    <h2>LED Strip</h2>
+    <div id="led-controls" hx-get="/led" hx-trigger="load" hx-swap="innerHTML">
+        Loading...
+    </div>
+</div>
+
+<div class="card">
+    <h2>Widgets</h2>
+    <div id="widgets" hx-get="/widgets" hx-trigger="load" hx-swap="innerHTML">
+        Loading...
+    </div>
+</div>
+{% endblock %}

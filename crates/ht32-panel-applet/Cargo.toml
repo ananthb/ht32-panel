@@ -1,0 +1,19 @@
+[package]
+name = "ht32-panel-applet"
+description = "System tray applet for HT32 Panel control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ht32-panel-applet"
+path = "src/main.rs"
+
+[dependencies]
+ksni = "0.2"
+zbus = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+open = "5"

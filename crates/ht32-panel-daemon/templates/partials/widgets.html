@@ -1,0 +1,26 @@
+<ul class="widget-list">
+{% for widget in widgets %}
+    <li class="widget-item">
+        <span>{{ widget.name }} ({{ widget.id }})</span>
+        <span style="color: #888; font-size: 0.8rem;">
+            {{ widget.x }}, {{ widget.y }} - {{ widget.width }}x{{ widget.height }}
+        </span>
+        <button class="btn" hx-post="/widgets/delete" hx-vals='{"id": {{ widget.id }}}'
+                hx-target="#widgets" hx-swap="innerHTML">Delete</button>
+    </li>
+{% else %}
+    <li style="color: #666; padding: 0.5rem;">No widgets</li>
+{% endfor %}
+</ul>
+
+<form hx-post="/widgets/add" hx-target="#widgets" hx-swap="innerHTML" style="margin-top: 1rem;">
+    <div class="controls">
+        <select name="name">
+            <option value="text">Text</option>
+            <option value="bar">Bar</option>
+            <option value="line">Line</option>
+            <option value="image">Image</option>
+        </select>
+        <button type="submit" class="btn">Add Widget</button>
+    </div>
+</form>

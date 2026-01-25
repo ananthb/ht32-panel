@@ -1,0 +1,36 @@
+app-id: org.ht32panel.Daemon
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+
+command: ht32paneld
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=session-bus
+  - --device=all
+  - --filesystem=home:ro
+
+modules:
+  - name: ht32-panel
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/ht32-panel/cargo
+    build-commands:
+      - cargo --offline build --release --workspace
+      - install -Dm755 target/release/ht32paneld -t /app/bin/
+      - install -Dm755 target/release/ht32panelctl -t /app/bin/
+      - install -Dm755 target/release/ht32-panel-applet -t /app/bin/
+      - install -Dm644 packaging/org.ht32panel.Daemon.desktop -t /app/share/applications/
+      - install -Dm644 packaging/org.ht32panel.Daemon.svg -t /app/share/icons/hicolor/scalable/apps/
+      - mkdir -p /app/share/ht32-panel
+      - cp -r config themes /app/share/ht32-panel/
+    sources:
+      - type: dir
+        path: ../..
+      - cargo-sources.json

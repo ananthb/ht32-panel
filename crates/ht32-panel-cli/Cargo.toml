@@ -1,0 +1,18 @@
+[package]
+name = "ht32-panel-cli"
+description = "CLI control tool for HT32 Panel daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ht32panelctl"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+zbus = { workspace = true }
