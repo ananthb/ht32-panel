@@ -2,17 +2,12 @@
 
 use crate::{Error, Result};
 use std::str::FromStr;
-use std::time::Duration;
 use tokio::io::AsyncWriteExt;
-use tokio::time::sleep;
 use tokio_serial::{DataBits, Parity, SerialPortBuilderExt, StopBits};
 use tracing::{debug, info};
 
 /// LED signature byte.
 const SIGNATURE_BYTE: u8 = 0xFA;
-
-/// Delay between bytes in milliseconds.
-const BYTE_DELAY_MS: u64 = 5;
 
 /// LED baud rate.
 const BAUD_RATE: u32 = 10000;

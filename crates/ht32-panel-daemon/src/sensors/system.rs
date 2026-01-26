@@ -68,7 +68,7 @@ impl SystemInfo {
                         "America/New_York" | "US/Eastern" => 5 * 3600, // Actually should be -5, but we add to UTC
                         "America/Los_Angeles" | "US/Pacific" => 8 * 3600,
                         "Europe/London" | "GB" => 0,
-                        "Europe/Paris" | "Europe/Berlin" => 1 * 3600,
+                        "Europe/Paris" | "Europe/Berlin" => 3600,
                         "Asia/Tokyo" | "Japan" => 9 * 3600,
                         "Asia/Kolkata" | "Asia/Calcutta" => (5 * 3600) + 1800, // UTC+5:30
                         _ => 0,
