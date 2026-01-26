@@ -18,17 +18,61 @@ pub struct LcdDevice {
     current_orientation: Mutex<Orientation>,
 }
 
+/// The HID interface number used for LCD data transfer.
+/// The device has multiple interfaces; interface 0 appears to be for display control.
+/// Reference implementation uses interface 1.1 (config 1, interface 1).
+const LCD_INTERFACE: i32 = 0;
+
 impl LcdDevice {
     /// Opens the LCD device by VID:PID.
+    ///
+    /// The device has multiple HID interfaces. This function finds and opens
+    /// the correct interface for display control (interface 2).
     pub fn open() -> Result<Self> {
         let api = HidApi::new()?;
 
-        let device = api.open(LCD_VID, LCD_PID).map_err(|_| Error::LcdNotFound)?;
+        // Enumerate all devices to find the correct interface
+        let devices: Vec<_> = api
+            .device_list()
+            .filter(|d| d.vendor_id() == LCD_VID && d.product_id() == LCD_PID)
+            .collect();
+
+        if devices.is_empty() {
+            return Err(Error::LcdNotFound);
+        }
+
+        // Log all found interfaces for debugging
+        for dev in &devices {
+            debug!(
+                "Found HID device: path={:?}, interface={}",
+                dev.path(),
+                dev.interface_number()
+            );
+        }
+
+        // Find the interface we need (interface 2 for display data)
+        let device_info = devices
+            .iter()
+            .find(|d| d.interface_number() == LCD_INTERFACE)
+            .or_else(|| devices.first()) // Fallback to first device if interface 2 not found
+            .ok_or(Error::LcdNotFound)?;
+
+        let device = device_info.open_device(&api).map_err(|e| {
+            debug!("Failed to open device: {}", e);
+            Error::LcdNotFound
+        })?;
 
         info!(
-            "LCD device opened (VID:{:04X} PID:{:04X})",
-            LCD_VID, LCD_PID
+            "LCD device opened (VID:{:04X} PID:{:04X}, interface={})",
+            LCD_VID,
+            LCD_PID,
+            device_info.interface_number()
         );
+
+        // Initial cooldown period - device needs time to initialize after opening
+        // Reference implementation uses 1000ms delay before any commands
+        debug!("Waiting for device initialization (1s cooldown)...");
+        std::thread::sleep(std::time::Duration::from_millis(1000));
 
         Ok(Self {
             device: Mutex::new(device),
