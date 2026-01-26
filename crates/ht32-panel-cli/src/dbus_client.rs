@@ -66,30 +66,29 @@ pub struct DaemonClient {
 impl DaemonClient {
     /// Attempts to connect to the daemon via D-Bus.
     pub async fn connect(bus_type: BusType) -> Result<Self> {
-        let connection = match bus_type {
-            BusType::Session => Connection::session()
-                .await
-                .context("Failed to connect to session bus")?,
-            BusType::System => Connection::system()
-                .await
-                .context("Failed to connect to system bus")?,
+        match bus_type {
+            BusType::Session => Self::connect_to_bus(Connection::session().await?).await,
+            BusType::System => Self::connect_to_bus(Connection::system().await?).await,
             BusType::Auto => {
                 // Try session bus first, fall back to system bus
-                match Connection::session().await {
-                    Ok(conn) => conn,
-                    Err(session_err) => {
-                        warn!(
-                            "Session bus unavailable ({}), trying system bus",
-                            session_err
-                        );
-                        Connection::system()
-                            .await
-                            .context("Failed to connect to any D-Bus")?
+                if let Ok(session_conn) = Connection::session().await {
+                    if let Ok(client) = Self::connect_to_bus(session_conn).await {
+                        return Ok(client);
                     }
+                    warn!("Daemon not found on session bus, trying system bus");
                 }
+                let system_conn = Connection::system()
+                    .await
+                    .context("Failed to connect to any D-Bus")?;
+                Self::connect_to_bus(system_conn)
+                    .await
+                    .context("Daemon not found on session or system bus")
             }
-        };
+        }
+    }
 
+    /// Connect to the daemon on a specific bus connection.
+    async fn connect_to_bus(connection: Connection) -> Result<Self> {
         let proxy = Daemon1Proxy::new(&connection)
             .await
             .context("Failed to create D-Bus proxy")?;
