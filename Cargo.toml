@@ -16,7 +16,8 @@ repository = "https://github.com/ananthb/ht32-panel"
 
 [workspace.dependencies]
 # Hardware
-hidapi = "2"
+# Use libusb backend on Linux to match reference implementation
+hidapi = { version = "2", default-features = false, features = ["linux-static-libusb"] }
 tokio-serial = "5"
 
 # D-Bus

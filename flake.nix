@@ -35,6 +35,7 @@
 
         buildInputs = with pkgs; [
           hidapi
+          libusb1
           udev
           systemd
           dbus

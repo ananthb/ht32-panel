@@ -52,6 +52,14 @@ impl AppState {
         // Try to open LCD device
         let lcd = match LcdDevice::open() {
             Ok(device) => {
+                // Send initial heartbeat to wake up the device
+                if let Err(e) = device.heartbeat() {
+                    tracing::warn!("Failed to send initial heartbeat: {}", e);
+                }
+                // Set initial orientation
+                if let Err(e) = device.set_orientation(Orientation::default()) {
+                    tracing::warn!("Failed to set initial orientation: {}", e);
+                }
                 info!("LCD device opened successfully");
                 Some(Mutex::new(device))
             }
@@ -166,9 +174,11 @@ impl AppState {
 
         if needs_redraw {
             // Get canvas and render to framebuffer
-            let canvas = self.canvas.read().unwrap();
+            let mut canvas = self.canvas.write().unwrap();
             let mut framebuffer = self.framebuffer.write().unwrap();
 
+            // Render canvas content (background, widgets)
+            canvas.render();
             canvas.render_to_framebuffer(&mut framebuffer)?;
 
             // Send to LCD

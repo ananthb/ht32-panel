@@ -19,15 +19,15 @@ pub struct LcdDevice {
 }
 
 /// The HID interface number used for LCD data transfer.
-/// The device has multiple interfaces; interface 2 is for display data.
-/// (Some devices may use interface 0 or 1 depending on firmware)
-const LCD_INTERFACE: i32 = 2;
+/// The device has multiple interfaces; interface 1 is for display data.
+/// Reference implementation uses interface 1 (path "1-8:1.1").
+const LCD_INTERFACE: i32 = 1;
 
 impl LcdDevice {
     /// Opens the LCD device by VID:PID.
     ///
     /// The device has multiple HID interfaces. This function finds and opens
-    /// the correct interface for display control (interface 2).
+    /// the correct interface for display control (interface 1).
     pub fn open() -> Result<Self> {
         let api = HidApi::new()?;
 
@@ -50,7 +50,7 @@ impl LcdDevice {
             );
         }
 
-        // Find the interface we need (interface 2 for display data)
+        // Find the interface we need (interface 1 for display data)
         let device_info = devices
             .iter()
             .find(|d| d.interface_number() == LCD_INTERFACE)
@@ -100,6 +100,8 @@ impl LcdDevice {
     pub fn set_orientation(&self, orientation: Orientation) -> Result<()> {
         let packet = build_orientation_packet(orientation.is_portrait());
 
+        debug!("Orientation packet header: {:02X?}", &packet[0..10]);
+
         let device = self.device.lock().unwrap();
         device.write(&packet)?;
 
@@ -117,6 +119,8 @@ impl LcdDevice {
     /// Sends a heartbeat with explicit time values.
     pub fn heartbeat_with_time(&self, hours: u8, minutes: u8, seconds: u8) -> Result<()> {
         let packet = build_heartbeat_packet(hours, minutes, seconds);
+
+        debug!("Heartbeat packet header: {:02X?}", &packet[0..10]);
 
         let device = self.device.lock().unwrap();
         device.write(&packet)?;
@@ -140,6 +144,16 @@ impl LcdDevice {
         for chunk_idx in 0..CHUNK_COUNT {
             let offset = chunk_idx * (DATA_SIZE / 2);
             let packet = build_redraw_chunk(chunk_idx, &data, offset);
+
+            // Log first chunk header for debugging
+            if chunk_idx == 0 {
+                debug!(
+                    "Redraw chunk 0 header: {:02X?}, first data bytes: {:02X?}",
+                    &packet[0..12],
+                    &packet[9..21]
+                );
+            }
+
             device.write(&packet)?;
         }
 

@@ -13,6 +13,8 @@
 
     # Hardware libraries
     hidapi
+    libusb1
+    libusb1.dev
     udev
     systemd
 
