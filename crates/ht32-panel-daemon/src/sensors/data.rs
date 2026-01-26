@@ -5,7 +5,7 @@
 pub struct SystemData {
     /// Hostname of the system
     pub hostname: String,
-    /// Current time formatted as "HH:MM:SS"
+    /// Current time formatted as "HH:MM"
     pub time: String,
     /// Uptime formatted as "Xd Yh Zm"
     pub uptime: String,
@@ -17,10 +17,16 @@ pub struct SystemData {
     pub disk_read_rate: f64,
     /// Disk write rate in bytes/second
     pub disk_write_rate: f64,
+    /// Network interface name
+    pub net_interface: String,
     /// Network receive rate in bytes/second
     pub net_rx_rate: f64,
     /// Network transmit rate in bytes/second
     pub net_tx_rate: f64,
+    /// IPv6 address (if available)
+    pub ipv6_address: Option<String>,
+    /// IPv4 address (if available)
+    pub ipv4_address: Option<String>,
 }
 
 impl SystemData {

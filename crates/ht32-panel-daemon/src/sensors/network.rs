@@ -2,7 +2,9 @@
 
 use super::Sensor;
 use std::fs;
+use std::process::Command;
 use std::time::Instant;
+use tracing::info;
 
 /// Network throughput sensor.
 pub struct NetworkSensor {
@@ -13,6 +15,9 @@ pub struct NetworkSensor {
     last_time: Option<Instant>,
     last_rx_rate: f64,
     last_tx_rate: f64,
+    cached_ipv4: Option<String>,
+    cached_ipv6: Option<String>,
+    last_ip_check: Option<Instant>,
 }
 
 impl NetworkSensor {
@@ -26,7 +31,56 @@ impl NetworkSensor {
             last_time: None,
             last_rx_rate: 0.0,
             last_tx_rate: 0.0,
+            cached_ipv4: None,
+            cached_ipv6: None,
+            last_ip_check: None,
         }
+    }
+
+    /// Creates a new network sensor with auto-detected interface.
+    /// Tries to find the default gateway interface, falls back to first active interface.
+    pub fn auto() -> Self {
+        let interface = Self::detect_interface().unwrap_or_else(|| "eth0".to_string());
+        info!("Network sensor using interface: {}", interface);
+        Self::new(&interface)
+    }
+
+    /// Detects the primary network interface.
+    /// Checks /proc/net/route for the default gateway interface.
+    fn detect_interface() -> Option<String> {
+        // Try to find the default route interface from /proc/net/route
+        if let Ok(content) = fs::read_to_string("/proc/net/route") {
+            for line in content.lines().skip(1) {
+                // Skip header
+                let fields: Vec<&str> = line.split_whitespace().collect();
+                if fields.len() >= 2 {
+                    let iface = fields[0];
+                    let destination = fields[1];
+                    // Default route has destination 00000000
+                    if destination == "00000000" {
+                        return Some(iface.to_string());
+                    }
+                }
+            }
+        }
+
+        // Fallback: find first non-loopback interface with statistics
+        if let Ok(entries) = fs::read_dir("/sys/class/net") {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                // Skip loopback and virtual interfaces
+                if name == "lo" || name.starts_with("veth") || name.starts_with("docker") {
+                    continue;
+                }
+                // Check if interface has stats
+                let stats_path = format!("/sys/class/net/{}/statistics/rx_bytes", name);
+                if fs::metadata(&stats_path).is_ok() {
+                    return Some(name);
+                }
+            }
+        }
+
+        None
     }
 
     fn read_stats(&self) -> Option<(u64, u64)> {
@@ -47,6 +101,76 @@ impl NetworkSensor {
     /// Returns the current TX rate in bytes/second.
     pub fn tx_rate(&self) -> f64 {
         self.last_tx_rate
+    }
+
+    /// Returns the network interface name.
+    pub fn interface_name(&self) -> &str {
+        &self.interface
+    }
+
+    /// Returns the IPv4 address for this interface (cached, refreshed every 30s).
+    pub fn ipv4_address(&mut self) -> Option<String> {
+        self.refresh_ip_cache();
+        self.cached_ipv4.clone()
+    }
+
+    /// Returns the IPv6 address for this interface (cached, refreshed every 30s).
+    pub fn ipv6_address(&mut self) -> Option<String> {
+        self.refresh_ip_cache();
+        self.cached_ipv6.clone()
+    }
+
+    /// Refreshes the IP address cache if stale (older than 30 seconds).
+    fn refresh_ip_cache(&mut self) {
+        let should_refresh = self
+            .last_ip_check
+            .map(|t| t.elapsed().as_secs() > 30)
+            .unwrap_or(true);
+
+        if should_refresh {
+            let (ipv4, ipv6) = Self::get_ip_addresses(&self.interface);
+            self.cached_ipv4 = ipv4;
+            self.cached_ipv6 = ipv6;
+            self.last_ip_check = Some(Instant::now());
+        }
+    }
+
+    /// Gets IPv4 and IPv6 addresses for an interface using `ip addr`.
+    fn get_ip_addresses(interface: &str) -> (Option<String>, Option<String>) {
+        let mut ipv4 = None;
+        let mut ipv6 = None;
+
+        // Run `ip -o addr show <interface>` to get addresses
+        if let Ok(output) = Command::new("ip")
+            .args(["-o", "addr", "show", interface])
+            .output()
+        {
+            if let Ok(stdout) = String::from_utf8(output.stdout) {
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    // Format: "2: eth0    inet 192.168.1.100/24 ..."
+                    // or:     "2: eth0    inet6 fe80::1/64 ..."
+                    if let Some(idx) = parts.iter().position(|&p| p == "inet" || p == "inet6") {
+                        if idx + 1 < parts.len() {
+                            let addr_with_prefix = parts[idx + 1];
+                            // Remove the /prefix
+                            let addr = addr_with_prefix.split('/').next().unwrap_or("");
+
+                            if parts[idx] == "inet" && ipv4.is_none() {
+                                ipv4 = Some(addr.to_string());
+                            } else if parts[idx] == "inet6" && ipv6.is_none() {
+                                // Skip link-local addresses (fe80::)
+                                if !addr.starts_with("fe80:") {
+                                    ipv6 = Some(addr.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        (ipv4, ipv6)
     }
 }
 

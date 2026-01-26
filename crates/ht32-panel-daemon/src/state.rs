@@ -97,6 +97,16 @@ impl Sensors {
         }
     }
 
+    fn new_auto() -> Self {
+        Self {
+            cpu: CpuSensor::new(),
+            memory: MemorySensor::new(),
+            network: NetworkSensor::auto(),
+            disk: DiskSensor::auto(),
+            system: SystemInfo::new(),
+        }
+    }
+
     fn sample(&mut self) -> SystemData {
         // Sample all sensors
         let cpu_percent = self.cpu.sample();
@@ -112,8 +122,11 @@ impl Sensors {
             ram_percent,
             disk_read_rate: self.disk.read_rate(),
             disk_write_rate: self.disk.write_rate(),
+            net_interface: self.network.interface_name().to_string(),
             net_rx_rate: self.network.rx_rate(),
             net_tx_rate: self.network.tx_rate(),
+            ipv6_address: self.network.ipv6_address(),
+            ipv4_address: self.network.ipv4_address(),
         }
     }
 }
@@ -211,13 +224,11 @@ impl AppState {
         let mut canvas = Canvas::new(canvas_w as u32, canvas_h as u32);
         let framebuffer = Framebuffer::new();
 
-        // Initialize sensors with default network interface
-        let network_interface = config
-            .display
-            .network_interface
-            .clone()
-            .unwrap_or_else(|| "eth0".to_string());
-        let sensors = Sensors::new(&network_interface);
+        // Initialize sensors - use configured network interface or auto-detect
+        let sensors = match config.display.network_interface.as_ref() {
+            Some(iface) => Sensors::new(iface),
+            None => Sensors::new_auto(),
+        };
 
         // Load face from settings
         let face = faces::create_face(&settings.face).unwrap_or_else(|| {

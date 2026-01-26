@@ -2,7 +2,7 @@
 //!
 //! Layout (320x170):
 //! ```text
-//! endeavour               18:45:32
+//! endeavour               18:45
 //! Uptime: 5d 12h 34m
 //!
 //! CPU [████████░░░░░░░░] 45%
@@ -10,6 +10,7 @@
 //!
 //! Disk  R: 12 MB/s   W: 5 MB/s
 //! Net   ↓: 1.2 MB/s  ↑: 0.8 MB/s
+//! enp2s0: 2001:db8::1 / 192.168.1.100
 //! ```
 
 use super::Face;
@@ -175,6 +176,20 @@ impl Face for DetailedFace {
                 FONT_SMALL,
                 COLOR_WHITE,
             );
+            y += canvas.line_height(FONT_SMALL) + 4;
+
+            // Network interface and IPs (indented under Net:)
+            let indent = margin + 24;
+            canvas.draw_text(indent, y, &data.net_interface, FONT_SMALL, COLOR_CYAN);
+            y += canvas.line_height(FONT_SMALL) + 2;
+
+            if let Some(ref ipv6) = data.ipv6_address {
+                canvas.draw_text(indent, y, ipv6, FONT_SMALL, COLOR_GRAY);
+                y += canvas.line_height(FONT_SMALL) + 2;
+            }
+            if let Some(ref ipv4) = data.ipv4_address {
+                canvas.draw_text(indent, y, ipv4, FONT_SMALL, COLOR_GRAY);
+            }
         } else {
             // Landscape layout
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, COLOR_CYAN);
@@ -243,6 +258,19 @@ impl Face for DetailedFace {
             let net_tx = SystemData::format_rate(data.net_tx_rate);
             let net_text = format!("Net   \u{2193}: {}  \u{2191}: {}", net_rx, net_tx);
             canvas.draw_text(margin, y, &net_text, FONT_SMALL, COLOR_WHITE);
+            y += canvas.line_height(FONT_SMALL) + 4;
+
+            // Network interface and IPs (indented under Net:)
+            let indent = margin + 24;
+            let mut ip_parts = vec![data.net_interface.clone()];
+            if let Some(ref ipv6) = data.ipv6_address {
+                ip_parts.push(ipv6.clone());
+            }
+            if let Some(ref ipv4) = data.ipv4_address {
+                ip_parts.push(ipv4.clone());
+            }
+            let ip_text = ip_parts.join(" ");
+            canvas.draw_text(indent, y, &ip_text, FONT_SMALL, COLOR_GRAY);
         }
     }
 }

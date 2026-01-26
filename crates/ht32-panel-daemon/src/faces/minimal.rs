@@ -2,12 +2,14 @@
 //!
 //! Layout (320x170):
 //! ```text
-//! endeavour               18:45:32
+//! endeavour               18:45
 //! Up: 5d 12h 34m
 //!
 //! CPU: 45%    RAM: 67%
 //! Disk R/W: 12/5 MB/s
 //! Net: 1.2/0.8 MB/s
+//! enp2s0: 2001:db8::1
+//!         192.168.1.100
 //! ```
 
 use super::Face;
@@ -106,6 +108,20 @@ impl Face for MinimalFace {
                 FONT_NORMAL,
                 COLOR_WHITE,
             );
+            y += canvas.line_height(FONT_NORMAL) + 6;
+
+            // Network interface and IPs (indented under Net:)
+            let indent = margin + 24;
+            canvas.draw_text(indent, y, &data.net_interface, FONT_NORMAL, COLOR_CYAN);
+            y += canvas.line_height(FONT_NORMAL) + 2;
+
+            if let Some(ref ipv6) = data.ipv6_address {
+                canvas.draw_text(indent, y, ipv6, FONT_NORMAL, COLOR_GRAY);
+                y += canvas.line_height(FONT_NORMAL) + 2;
+            }
+            if let Some(ref ipv4) = data.ipv4_address {
+                canvas.draw_text(indent, y, ipv4, FONT_NORMAL, COLOR_GRAY);
+            }
         } else {
             // Landscape layout - side by side
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, COLOR_CYAN);
@@ -139,6 +155,20 @@ impl Face for MinimalFace {
             let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
             let net_text = format!("Net \u{2193}{} \u{2191}{}", net_rx, net_tx);
             canvas.draw_text(margin, y, &net_text, FONT_NORMAL, COLOR_WHITE);
+            y += canvas.line_height(FONT_NORMAL) + 4;
+
+            // Network interface and IPs (indented under Net:)
+            let indent = margin + 24;
+            canvas.draw_text(indent, y, &data.net_interface, FONT_NORMAL, COLOR_CYAN);
+            y += canvas.line_height(FONT_NORMAL) + 2;
+
+            if let Some(ref ipv6) = data.ipv6_address {
+                canvas.draw_text(indent, y, ipv6, FONT_NORMAL, COLOR_GRAY);
+                y += canvas.line_height(FONT_NORMAL) + 2;
+            }
+            if let Some(ref ipv4) = data.ipv4_address {
+                canvas.draw_text(indent, y, ipv4, FONT_NORMAL, COLOR_GRAY);
+            }
         }
     }
 }
