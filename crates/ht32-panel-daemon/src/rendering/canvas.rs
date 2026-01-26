@@ -250,6 +250,11 @@ impl Canvas {
     pub fn pixels(&self) -> &[u8] {
         self.pixmap.data()
     }
+
+    /// Returns the pixmap pixels as color values.
+    pub fn pixmap_pixels(&self) -> &[tiny_skia::PremultipliedColorU8] {
+        self.pixmap.pixels()
+    }
 }
 
 #[cfg(test)]

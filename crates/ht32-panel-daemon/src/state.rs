@@ -193,8 +193,8 @@ impl AppState {
                 if let Err(e) = device.heartbeat() {
                     warn!("Failed to send initial heartbeat: {}", e);
                 }
-                // Set initial orientation from state
-                if let Err(e) = device.set_orientation(orientation) {
+                // Always use hardware landscape mode - orientation is handled in software
+                if let Err(e) = device.set_orientation(Orientation::Landscape) {
                     warn!("Failed to set initial orientation: {}", e);
                 }
                 info!("LCD device opened successfully");
@@ -206,7 +206,9 @@ impl AppState {
             }
         };
 
-        let mut canvas = Canvas::new(config.canvas.width, config.canvas.height);
+        // Create canvas with dimensions based on saved orientation
+        let (canvas_w, canvas_h) = orientation.dimensions();
+        let mut canvas = Canvas::new(canvas_w as u32, canvas_h as u32);
         let framebuffer = Framebuffer::new();
 
         // Initialize sensors with default network interface
@@ -328,19 +330,27 @@ impl AppState {
 
     /// Sets the display orientation.
     pub fn set_orientation(&self, orientation: Orientation) -> Result<()> {
+        // Always keep hardware in landscape mode - we handle orientation in software
         if let Some(ref lcd) = self.lcd {
             let device = lcd.lock().unwrap();
-            device.set_orientation(orientation)?;
+            // Use hardware landscape mode always - portrait is handled via software rotation
+            device.set_orientation(Orientation::Landscape)?;
         }
         *self.orientation.write().unwrap() = orientation;
 
-        // Resize canvas and framebuffer for new orientation
+        // Resize canvas for the logical orientation (faces render to this)
         let (width, height) = orientation.dimensions();
-        self.canvas
-            .write()
-            .unwrap()
-            .resize(width as u32, height as u32);
-        self.framebuffer.write().unwrap().resize(width, height);
+        {
+            let mut canvas = self.canvas.write().unwrap();
+            canvas.resize(width as u32, height as u32);
+            canvas.clear(); // Clear to avoid stale content
+        }
+        // Keep framebuffer at hardware native size (320x170) - we transform canvas into it
+        {
+            let mut fb = self.framebuffer.write().unwrap();
+            fb.resize(320, 170);
+            fb.clear(0); // Clear to black
+        }
 
         *self.needs_redraw.write().unwrap() = true;
         self.save_display_settings();
@@ -426,11 +436,14 @@ impl AppState {
             face.render(&mut canvas, &system_data);
         }
 
-        // Render canvas to framebuffer and send to LCD
+        // Render canvas to framebuffer with orientation transformation
         {
             let canvas = self.canvas.read().unwrap();
             let mut framebuffer = self.framebuffer.write().unwrap();
-            canvas.render_to_framebuffer(&mut framebuffer)?;
+            let orientation = *self.orientation.read().unwrap();
+
+            // Transform canvas to framebuffer based on orientation
+            self.render_with_orientation(&canvas, &mut framebuffer, orientation)?;
 
             // Send to LCD
             if let Some(ref lcd) = self.lcd {
@@ -452,24 +465,96 @@ impl AppState {
         Ok(())
     }
 
+    /// Renders canvas to framebuffer with orientation transformation.
+    fn render_with_orientation(
+        &self,
+        canvas: &Canvas,
+        framebuffer: &mut Framebuffer,
+        orientation: Orientation,
+    ) -> Result<()> {
+        use ht32_panel_hw::lcd::rgb888_to_rgb565;
+
+        let pixels = canvas.pixmap_pixels();
+        let fb_data = framebuffer.data_mut();
+        let (cw, ch) = canvas.dimensions();
+
+        match orientation {
+            Orientation::Landscape => {
+                // Direct copy - canvas is 320x170, framebuffer is 320x170
+                for (i, pixel) in pixels.iter().enumerate() {
+                    if i < fb_data.len() {
+                        fb_data[i] = rgb888_to_rgb565(pixel.red(), pixel.green(), pixel.blue());
+                    }
+                }
+            }
+            Orientation::LandscapeUpsideDown => {
+                // Copy reversed (180° rotation)
+                let len = fb_data.len();
+                for (i, pixel) in pixels.iter().enumerate() {
+                    if i < len {
+                        fb_data[len - 1 - i] =
+                            rgb888_to_rgb565(pixel.red(), pixel.green(), pixel.blue());
+                    }
+                }
+            }
+            Orientation::Portrait => {
+                // Canvas is 170x320, rotate 90° CW to get 320x170
+                // For each pixel at (x, y) in canvas, place at (ch - 1 - y, x) in framebuffer
+                for y in 0..ch {
+                    for x in 0..cw {
+                        let src_idx = (y * cw + x) as usize;
+                        let dst_x = ch - 1 - y;
+                        let dst_y = x;
+                        let dst_idx = (dst_y * 320 + dst_x) as usize;
+                        if src_idx < pixels.len() && dst_idx < fb_data.len() {
+                            let pixel = &pixels[src_idx];
+                            fb_data[dst_idx] =
+                                rgb888_to_rgb565(pixel.red(), pixel.green(), pixel.blue());
+                        }
+                    }
+                }
+            }
+            Orientation::PortraitUpsideDown => {
+                // Canvas is 170x320, rotate 90° CCW to get 320x170
+                // For each pixel at (x, y) in canvas, place at (y, cw - 1 - x) in framebuffer
+                for y in 0..ch {
+                    for x in 0..cw {
+                        let src_idx = (y * cw + x) as usize;
+                        let dst_x = y;
+                        let dst_y = cw - 1 - x;
+                        let dst_idx = (dst_y * 320 + dst_x) as usize;
+                        if src_idx < pixels.len() && dst_idx < fb_data.len() {
+                            let pixel = &pixels[src_idx];
+                            fb_data[dst_idx] =
+                                rgb888_to_rgb565(pixel.red(), pixel.green(), pixel.blue());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Triggers a full redraw on the next frame.
     pub fn force_redraw(&self) {
         *self.needs_redraw.write().unwrap() = true;
     }
 
-    /// Returns the current framebuffer as PNG bytes.
+    /// Returns the current canvas as PNG bytes.
+    /// This shows the logical orientation (portrait/landscape) as seen by the user.
     pub fn get_screen_png(&self) -> Result<Vec<u8>> {
-        let fb = self.framebuffer.read().unwrap();
-        let rgba = fb.to_rgba8();
+        let canvas = self.canvas.read().unwrap();
+        let (width, height) = canvas.dimensions();
+        let rgba = canvas.pixels();
 
         let mut png_data = Vec::new();
         {
-            let mut encoder =
-                png::Encoder::new(&mut png_data, fb.width() as u32, fb.height() as u32);
+            let mut encoder = png::Encoder::new(&mut png_data, width, height);
             encoder.set_color(png::ColorType::Rgba);
             encoder.set_depth(png::BitDepth::Eight);
             let mut writer = encoder.write_header()?;
-            writer.write_image_data(&rgba)?;
+            writer.write_image_data(rgba)?;
         }
 
         Ok(png_data)

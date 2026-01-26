@@ -55,30 +55,9 @@ impl Orientation {
     }
 
     /// Rotate a buffer 180 degrees in place.
-    pub fn rotate_180(buffer: &mut [u16], width: u16, height: u16) {
-        let len = buffer.len();
-        for i in 0..len / 2 {
-            buffer.swap(i, len - 1 - i);
-        }
-        // Also need to swap bytes within each row for proper rotation
-        let w = width as usize;
-        let h = height as usize;
-        for y in 0..h / 2 {
-            for x in 0..w {
-                let idx1 = y * w + x;
-                let idx2 = (h - 1 - y) * w + (w - 1 - x);
-                buffer.swap(idx1, idx2);
-            }
-        }
-        // Handle middle row for odd height
-        if h % 2 == 1 {
-            let mid_y = h / 2;
-            for x in 0..w / 2 {
-                let idx1 = mid_y * w + x;
-                let idx2 = mid_y * w + (w - 1 - x);
-                buffer.swap(idx1, idx2);
-            }
-        }
+    /// For a 2D buffer stored row-major, 180° rotation is simply reversing all elements.
+    pub fn rotate_180(buffer: &mut [u16], _width: u16, _height: u16) {
+        buffer.reverse();
     }
 }
 
