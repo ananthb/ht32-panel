@@ -166,6 +166,9 @@ pub struct AppState {
 
     /// Background image path (optional)
     background_image: RwLock<Option<PathBuf>>,
+
+    /// Refresh rate in seconds (2-60)
+    refresh_rate_secs: RwLock<u32>,
 }
 
 impl AppState {
@@ -256,6 +259,7 @@ impl AppState {
             background_color: RwLock::new(bg_color),
             foreground_color: RwLock::new(fg_color),
             background_image: RwLock::new(bg_image),
+            refresh_rate_secs: RwLock::new(2),
         })
     }
 
@@ -329,10 +333,31 @@ impl AppState {
             device.set_orientation(orientation)?;
         }
         *self.orientation.write().unwrap() = orientation;
+
+        // Resize canvas and framebuffer for new orientation
+        let (width, height) = orientation.dimensions();
+        self.canvas
+            .write()
+            .unwrap()
+            .resize(width as u32, height as u32);
+        self.framebuffer.write().unwrap().resize(width, height);
+
         *self.needs_redraw.write().unwrap() = true;
         self.save_display_settings();
         info!("Orientation set to: {}", orientation);
         Ok(())
+    }
+
+    /// Gets the current refresh rate in seconds.
+    pub fn refresh_rate_secs(&self) -> u32 {
+        *self.refresh_rate_secs.read().unwrap()
+    }
+
+    /// Sets the refresh rate in seconds (clamped to 2-60).
+    pub fn set_refresh_rate_secs(&self, secs: u32) {
+        let clamped = secs.clamp(2, 60);
+        *self.refresh_rate_secs.write().unwrap() = clamped;
+        info!("Refresh rate set to {}s", clamped);
     }
 
     /// Gets the current LED settings.

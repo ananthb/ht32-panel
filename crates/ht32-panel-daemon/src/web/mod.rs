@@ -65,6 +65,13 @@ struct BackgroundTemplate {
     background_image: String,
 }
 
+/// Preview partial template.
+#[derive(Template)]
+#[template(path = "partials/preview.html")]
+struct PreviewTemplate {
+    timestamp: u128,
+}
+
 /// Widget info for template.
 struct WidgetInfo {
     id: u32,
@@ -97,6 +104,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/colors", get(colors_get).post(colors_set))
         .route("/background", get(background_get).post(background_set))
         .route("/background/clear", post(background_clear))
+        .route("/preview", get(preview_get))
+        .route("/refresh-rate", post(refresh_rate_set))
         .route("/widgets", get(widgets_get))
         .route("/widgets/add", post(widget_add))
         .route("/widgets/delete", post(widget_delete))
@@ -312,6 +321,30 @@ async fn background_clear(State(state): State<Arc<AppState>>) -> impl IntoRespon
     state.set_background_image(None);
     let background_image = String::new();
     Html(BackgroundTemplate { background_image }.render().unwrap())
+}
+
+/// GET /preview - Preview image partial
+async fn preview_get() -> impl IntoResponse {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    Html(PreviewTemplate { timestamp }.render().unwrap())
+}
+
+/// Form data for refresh rate.
+#[derive(Deserialize)]
+struct RefreshRateForm {
+    rate: u32,
+}
+
+/// POST /refresh-rate - Set LCD refresh rate
+async fn refresh_rate_set(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<RefreshRateForm>,
+) -> impl IntoResponse {
+    state.set_refresh_rate_secs(form.rate);
+    StatusCode::OK
 }
 
 /// GET /widgets - Widgets list partial

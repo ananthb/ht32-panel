@@ -58,6 +58,15 @@ impl Canvas {
         (self.width, self.height)
     }
 
+    /// Resizes the canvas to new dimensions.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if self.width != width || self.height != height {
+            self.width = width;
+            self.height = height;
+            self.pixmap = Pixmap::new(width, height).expect("Failed to create pixmap");
+        }
+    }
+
     /// Sets the background color.
     pub fn set_background(&mut self, color: u32) {
         self.background_color = color;

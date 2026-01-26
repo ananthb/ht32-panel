@@ -76,80 +76,173 @@ impl Face for DetailedFace {
 
     fn render(&self, canvas: &mut Canvas, data: &SystemData) {
         let (width, _height) = canvas.dimensions();
+        let portrait = width < 200;
         let margin = 8;
         let mut y = margin;
 
-        // Row 1: Hostname (left) and Time (right)
-        canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, COLOR_CYAN);
-        let time_width = canvas.text_width(&data.time, FONT_LARGE);
-        canvas.draw_text(
-            width as i32 - margin - time_width,
-            y,
-            &data.time,
-            FONT_LARGE,
-            COLOR_WHITE,
-        );
-        y += canvas.line_height(FONT_LARGE) + 2;
+        if portrait {
+            // Portrait layout - narrower bars, stacked text
+            let bar_width = (width as i32 - margin * 2 - 70) as u32;
+            let bar_x = margin + 35;
 
-        // Row 2: Uptime
-        let uptime_text = format!("Uptime: {}", data.uptime);
-        canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, COLOR_GRAY);
-        y += canvas.line_height(FONT_NORMAL) + 8;
+            canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, COLOR_CYAN);
+            y += canvas.line_height(FONT_LARGE) + 2;
 
-        // Row 3: CPU with progress bar
-        canvas.draw_text(margin, y, "CPU", FONT_SMALL, COLOR_WHITE);
-        let bar_x = margin + 35;
-        Self::draw_progress_bar(
-            canvas,
-            bar_x,
-            y + 1,
-            BAR_WIDTH,
-            BAR_HEIGHT,
-            data.cpu_percent,
-            COLOR_GREEN,
-        );
-        let cpu_percent = format!("{:3.0}%", data.cpu_percent);
-        canvas.draw_text(
-            bar_x + BAR_WIDTH as i32 + 6,
-            y,
-            &cpu_percent,
-            FONT_SMALL,
-            COLOR_WHITE,
-        );
-        y += canvas.line_height(FONT_SMALL) + 4;
+            canvas.draw_text(margin, y, &data.time, FONT_LARGE, COLOR_WHITE);
+            y += canvas.line_height(FONT_LARGE) + 2;
 
-        // Row 4: RAM with progress bar
-        canvas.draw_text(margin, y, "RAM", FONT_SMALL, COLOR_WHITE);
-        Self::draw_progress_bar(
-            canvas,
-            bar_x,
-            y + 1,
-            BAR_WIDTH,
-            BAR_HEIGHT,
-            data.ram_percent,
-            COLOR_BLUE,
-        );
-        let ram_percent = format!("{:3.0}%", data.ram_percent);
-        canvas.draw_text(
-            bar_x + BAR_WIDTH as i32 + 6,
-            y,
-            &ram_percent,
-            FONT_SMALL,
-            COLOR_WHITE,
-        );
-        y += canvas.line_height(FONT_SMALL) + 8;
+            let uptime_text = format!("Up: {}", data.uptime);
+            canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, COLOR_GRAY);
+            y += canvas.line_height(FONT_NORMAL) + 6;
 
-        // Row 5: Disk I/O
-        let disk_r = SystemData::format_rate(data.disk_read_rate);
-        let disk_w = SystemData::format_rate(data.disk_write_rate);
-        let disk_text = format!("Disk  R: {}  W: {}", disk_r, disk_w);
-        canvas.draw_text(margin, y, &disk_text, FONT_SMALL, COLOR_WHITE);
-        y += canvas.line_height(FONT_SMALL) + 4;
+            // CPU bar
+            canvas.draw_text(margin, y, "CPU", FONT_SMALL, COLOR_WHITE);
+            Self::draw_progress_bar(
+                canvas,
+                bar_x,
+                y + 1,
+                bar_width,
+                BAR_HEIGHT,
+                data.cpu_percent,
+                COLOR_GREEN,
+            );
+            let cpu_pct = format!("{:2.0}%", data.cpu_percent);
+            canvas.draw_text(
+                bar_x + bar_width as i32 + 4,
+                y,
+                &cpu_pct,
+                FONT_SMALL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_SMALL) + 4;
 
-        // Row 6: Network I/O
-        let net_rx = SystemData::format_rate(data.net_rx_rate);
-        let net_tx = SystemData::format_rate(data.net_tx_rate);
-        let net_text = format!("Net   \u{2193}: {}  \u{2191}: {}", net_rx, net_tx);
-        canvas.draw_text(margin, y, &net_text, FONT_SMALL, COLOR_WHITE);
+            // RAM bar
+            canvas.draw_text(margin, y, "RAM", FONT_SMALL, COLOR_WHITE);
+            Self::draw_progress_bar(
+                canvas,
+                bar_x,
+                y + 1,
+                bar_width,
+                BAR_HEIGHT,
+                data.ram_percent,
+                COLOR_BLUE,
+            );
+            let ram_pct = format!("{:2.0}%", data.ram_percent);
+            canvas.draw_text(
+                bar_x + bar_width as i32 + 4,
+                y,
+                &ram_pct,
+                FONT_SMALL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_SMALL) + 6;
+
+            // Disk I/O - split lines
+            let disk_r = SystemData::format_rate(data.disk_read_rate);
+            let disk_w = SystemData::format_rate(data.disk_write_rate);
+            canvas.draw_text(
+                margin,
+                y,
+                &format!("Disk R: {}", disk_r),
+                FONT_SMALL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_SMALL) + 2;
+            canvas.draw_text(
+                margin,
+                y,
+                &format!("Disk W: {}", disk_w),
+                FONT_SMALL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_SMALL) + 4;
+
+            // Network I/O - split lines
+            let net_rx = SystemData::format_rate(data.net_rx_rate);
+            let net_tx = SystemData::format_rate(data.net_tx_rate);
+            canvas.draw_text(
+                margin,
+                y,
+                &format!("Net \u{2193}: {}", net_rx),
+                FONT_SMALL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_SMALL) + 2;
+            canvas.draw_text(
+                margin,
+                y,
+                &format!("Net \u{2191}: {}", net_tx),
+                FONT_SMALL,
+                COLOR_WHITE,
+            );
+        } else {
+            // Landscape layout
+            canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, COLOR_CYAN);
+            let time_width = canvas.text_width(&data.time, FONT_LARGE);
+            canvas.draw_text(
+                width as i32 - margin - time_width,
+                y,
+                &data.time,
+                FONT_LARGE,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_LARGE) + 2;
+
+            let uptime_text = format!("Uptime: {}", data.uptime);
+            canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, COLOR_GRAY);
+            y += canvas.line_height(FONT_NORMAL) + 8;
+
+            let bar_x = margin + 35;
+            canvas.draw_text(margin, y, "CPU", FONT_SMALL, COLOR_WHITE);
+            Self::draw_progress_bar(
+                canvas,
+                bar_x,
+                y + 1,
+                BAR_WIDTH,
+                BAR_HEIGHT,
+                data.cpu_percent,
+                COLOR_GREEN,
+            );
+            let cpu_percent = format!("{:3.0}%", data.cpu_percent);
+            canvas.draw_text(
+                bar_x + BAR_WIDTH as i32 + 6,
+                y,
+                &cpu_percent,
+                FONT_SMALL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_SMALL) + 4;
+
+            canvas.draw_text(margin, y, "RAM", FONT_SMALL, COLOR_WHITE);
+            Self::draw_progress_bar(
+                canvas,
+                bar_x,
+                y + 1,
+                BAR_WIDTH,
+                BAR_HEIGHT,
+                data.ram_percent,
+                COLOR_BLUE,
+            );
+            let ram_percent = format!("{:3.0}%", data.ram_percent);
+            canvas.draw_text(
+                bar_x + BAR_WIDTH as i32 + 6,
+                y,
+                &ram_percent,
+                FONT_SMALL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_SMALL) + 8;
+
+            let disk_r = SystemData::format_rate(data.disk_read_rate);
+            let disk_w = SystemData::format_rate(data.disk_write_rate);
+            let disk_text = format!("Disk  R: {}  W: {}", disk_r, disk_w);
+            canvas.draw_text(margin, y, &disk_text, FONT_SMALL, COLOR_WHITE);
+            y += canvas.line_height(FONT_SMALL) + 4;
+
+            let net_rx = SystemData::format_rate(data.net_rx_rate);
+            let net_tx = SystemData::format_rate(data.net_tx_rate);
+            let net_text = format!("Net   \u{2193}: {}  \u{2191}: {}", net_rx, net_tx);
+            canvas.draw_text(margin, y, &net_text, FONT_SMALL, COLOR_WHITE);
+        }
     }
 }

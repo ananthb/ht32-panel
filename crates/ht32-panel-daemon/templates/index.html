@@ -10,12 +10,38 @@
 <div class="card preview">
     <h2>Display Preview</h2>
     <img id="lcd-preview" src="/lcd.png" alt="LCD Preview">
-    <script>
-        setInterval(function() {
-            document.getElementById('lcd-preview').src = '/lcd.png?t=' + Date.now();
-        }, 2000);
-    </script>
+    <div class="refresh-controls">
+        <label>Refresh: <span id="refresh-value">2</span>s</label>
+        <input type="range" id="refresh-slider" min="2" max="60" step="1" value="2">
+    </div>
 </div>
+<script>
+(function() {
+    const img = document.getElementById('lcd-preview');
+    const slider = document.getElementById('refresh-slider');
+    const label = document.getElementById('refresh-value');
+    let intervalId = null;
+
+    function refresh() {
+        const next = new Image();
+        next.onload = () => { img.src = next.src; };
+        next.src = '/lcd.png?t=' + Date.now();
+    }
+
+    function start(secs) {
+        if (intervalId) clearInterval(intervalId);
+        intervalId = setInterval(refresh, secs * 1000);
+        fetch('/refresh-rate', { method: 'POST', body: 'rate=' + secs, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+    }
+
+    slider.oninput = function() {
+        label.textContent = this.value;
+        start(parseInt(this.value));
+    };
+
+    start(2);
+})();
+</script>
 
 <div class="card">
     <h2>Orientation</h2>

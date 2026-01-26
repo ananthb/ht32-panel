@@ -129,13 +129,12 @@ async fn main() -> Result<()> {
 }
 
 async fn render_loop(state: Arc<AppState>) {
-    let poll_interval = std::time::Duration::from_millis(state.config().poll);
-
     loop {
         if let Err(e) = state.render_frame().await {
             warn!("Render error: {}", e);
         }
-        tokio::time::sleep(poll_interval).await;
+        let secs = state.refresh_rate_secs();
+        tokio::time::sleep(std::time::Duration::from_secs(secs as u64)).await;
     }
 }
 

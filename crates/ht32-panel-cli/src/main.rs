@@ -75,6 +75,11 @@ enum LcdCommands {
         /// Face name: minimal, detailed (omit to show current)
         face: Option<String>,
     },
+    /// Set or show the refresh rate
+    Refresh {
+        /// Refresh rate in seconds (2-60, omit to show current)
+        seconds: Option<u32>,
+    },
     /// Show device information
     Info,
 }
@@ -151,14 +156,28 @@ async fn handle_lcd(action: LcdCommands, client: &DaemonClient) -> Result<()> {
                 println!("Current face: {}", current);
             }
         }
+        LcdCommands::Refresh { seconds } => {
+            if let Some(secs) = seconds {
+                if !(2..=60).contains(&secs) {
+                    anyhow::bail!("Refresh rate must be between 2 and 60 seconds");
+                }
+                client.set_refresh_rate(secs).await?;
+                println!("Refresh rate set to: {}s", secs);
+            } else {
+                let current = client.get_refresh_rate().await?;
+                println!("Current refresh rate: {}s", current);
+            }
+        }
         LcdCommands::Info => {
             let connected = client.is_connected().await?;
             let orientation = client.get_orientation().await?;
             let face = client.get_face().await?;
+            let refresh = client.get_refresh_rate().await?;
             println!("LCD Status:");
             println!("  Connected: {}", if connected { "yes" } else { "no" });
             println!("  Orientation: {}", orientation);
             println!("  Face: {}", face);
+            println!("  Refresh rate: {}s", refresh);
         }
     }
 

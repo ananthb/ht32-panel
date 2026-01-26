@@ -59,6 +59,16 @@ trait Daemon1 {
     /// Current LED speed (1-5).
     #[zbus(property)]
     fn led_speed(&self) -> zbus::Result<u8>;
+
+    /// Gets the refresh rate in seconds.
+    fn get_refresh_rate(&self) -> zbus::Result<u32>;
+
+    /// Sets the refresh rate in seconds.
+    fn set_refresh_rate(&self, secs: u32) -> zbus::Result<()>;
+
+    /// Current refresh rate in seconds.
+    #[zbus(property)]
+    fn refresh_rate(&self) -> zbus::Result<u32>;
 }
 
 /// D-Bus client wrapper for the daemon.
@@ -180,5 +190,21 @@ impl DaemonClient {
             .connected()
             .await
             .context("Failed to get connection status via D-Bus")
+    }
+
+    /// Gets the refresh rate in seconds.
+    pub async fn get_refresh_rate(&self) -> Result<u32> {
+        self.proxy
+            .get_refresh_rate()
+            .await
+            .context("Failed to get refresh rate via D-Bus")
+    }
+
+    /// Sets the refresh rate in seconds.
+    pub async fn set_refresh_rate(&self, secs: u32) -> Result<()> {
+        self.proxy
+            .set_refresh_rate(secs)
+            .await
+            .context("Failed to set refresh rate via D-Bus")
     }
 }

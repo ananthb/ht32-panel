@@ -52,6 +52,16 @@ impl Framebuffer {
         self.height
     }
 
+    /// Resizes the framebuffer to new dimensions.
+    pub fn resize(&mut self, width: u16, height: u16) {
+        if self.width != width || self.height != height {
+            let size = width as usize * height as usize;
+            self.data = vec![0; size];
+            self.width = width;
+            self.height = height;
+        }
+    }
+
     /// Returns a reference to the raw pixel data.
     pub fn data(&self) -> &[u16] {
         &self.data

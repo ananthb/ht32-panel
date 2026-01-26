@@ -46,44 +46,99 @@ impl Face for MinimalFace {
 
     fn render(&self, canvas: &mut Canvas, data: &SystemData) {
         let (width, _height) = canvas.dimensions();
+        let portrait = width < 200;
         let margin = 8;
         let mut y = margin;
 
-        // Row 1: Hostname (left) and Time (right)
-        canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, COLOR_CYAN);
-        let time_width = canvas.text_width(&data.time, FONT_LARGE);
-        canvas.draw_text(
-            width as i32 - margin - time_width,
-            y,
-            &data.time,
-            FONT_LARGE,
-            COLOR_WHITE,
-        );
-        y += canvas.line_height(FONT_LARGE) + 2;
+        if portrait {
+            // Portrait layout - stack vertically
+            canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, COLOR_CYAN);
+            y += canvas.line_height(FONT_LARGE) + 2;
 
-        // Row 2: Uptime
-        let uptime_text = format!("Up: {}", data.uptime);
-        canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, COLOR_GRAY);
-        y += canvas.line_height(FONT_NORMAL) + 10;
+            canvas.draw_text(margin, y, &data.time, FONT_LARGE, COLOR_WHITE);
+            y += canvas.line_height(FONT_LARGE) + 2;
 
-        // Row 3: CPU and RAM
-        let cpu_text = format!("CPU: {:3.0}%", data.cpu_percent);
-        let ram_text = format!("RAM: {:3.0}%", data.ram_percent);
-        canvas.draw_text(margin, y, &cpu_text, FONT_NORMAL, COLOR_WHITE);
-        canvas.draw_text(margin + 100, y, &ram_text, FONT_NORMAL, COLOR_WHITE);
-        y += canvas.line_height(FONT_NORMAL) + 4;
+            let uptime_text = format!("Up: {}", data.uptime);
+            canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, COLOR_GRAY);
+            y += canvas.line_height(FONT_NORMAL) + 8;
 
-        // Row 4: Disk I/O
-        let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
-        let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
-        let disk_text = format!("Disk R/W: {}/{}", disk_r, disk_w);
-        canvas.draw_text(margin, y, &disk_text, FONT_NORMAL, COLOR_WHITE);
-        y += canvas.line_height(FONT_NORMAL) + 4;
+            let cpu_text = format!("CPU: {:3.0}%", data.cpu_percent);
+            canvas.draw_text(margin, y, &cpu_text, FONT_NORMAL, COLOR_WHITE);
+            y += canvas.line_height(FONT_NORMAL) + 2;
 
-        // Row 5: Network I/O
-        let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
-        let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
-        let net_text = format!("Net \u{2193}{} \u{2191}{}", net_rx, net_tx);
-        canvas.draw_text(margin, y, &net_text, FONT_NORMAL, COLOR_WHITE);
+            let ram_text = format!("RAM: {:3.0}%", data.ram_percent);
+            canvas.draw_text(margin, y, &ram_text, FONT_NORMAL, COLOR_WHITE);
+            y += canvas.line_height(FONT_NORMAL) + 6;
+
+            let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
+            let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
+            canvas.draw_text(
+                margin,
+                y,
+                &format!("Disk R: {}", disk_r),
+                FONT_NORMAL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_NORMAL) + 2;
+            canvas.draw_text(
+                margin,
+                y,
+                &format!("Disk W: {}", disk_w),
+                FONT_NORMAL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_NORMAL) + 6;
+
+            let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
+            let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
+            canvas.draw_text(
+                margin,
+                y,
+                &format!("Net \u{2193}: {}", net_rx),
+                FONT_NORMAL,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_NORMAL) + 2;
+            canvas.draw_text(
+                margin,
+                y,
+                &format!("Net \u{2191}: {}", net_tx),
+                FONT_NORMAL,
+                COLOR_WHITE,
+            );
+        } else {
+            // Landscape layout - side by side
+            canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, COLOR_CYAN);
+            let time_width = canvas.text_width(&data.time, FONT_LARGE);
+            canvas.draw_text(
+                width as i32 - margin - time_width,
+                y,
+                &data.time,
+                FONT_LARGE,
+                COLOR_WHITE,
+            );
+            y += canvas.line_height(FONT_LARGE) + 2;
+
+            let uptime_text = format!("Up: {}", data.uptime);
+            canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, COLOR_GRAY);
+            y += canvas.line_height(FONT_NORMAL) + 10;
+
+            let cpu_text = format!("CPU: {:3.0}%", data.cpu_percent);
+            let ram_text = format!("RAM: {:3.0}%", data.ram_percent);
+            canvas.draw_text(margin, y, &cpu_text, FONT_NORMAL, COLOR_WHITE);
+            canvas.draw_text(margin + 100, y, &ram_text, FONT_NORMAL, COLOR_WHITE);
+            y += canvas.line_height(FONT_NORMAL) + 4;
+
+            let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
+            let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
+            let disk_text = format!("Disk R/W: {}/{}", disk_r, disk_w);
+            canvas.draw_text(margin, y, &disk_text, FONT_NORMAL, COLOR_WHITE);
+            y += canvas.line_height(FONT_NORMAL) + 4;
+
+            let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
+            let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
+            let net_text = format!("Net \u{2193}{} \u{2191}{}", net_rx, net_tx);
+            canvas.draw_text(margin, y, &net_text, FONT_NORMAL, COLOR_WHITE);
+        }
     }
 }

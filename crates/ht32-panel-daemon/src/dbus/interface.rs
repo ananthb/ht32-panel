@@ -14,6 +14,7 @@ use crate::state::AppState;
 
 /// D-Bus signal types for state change notifications.
 #[derive(Clone, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum DaemonSignals {
     /// Orientation was changed.
     OrientationChanged,
@@ -282,6 +283,29 @@ impl Daemon1Interface {
     #[zbus(property)]
     fn face(&self) -> String {
         self.state.face_name()
+    }
+
+    /// Current refresh rate in seconds.
+    #[zbus(property)]
+    fn refresh_rate(&self) -> u32 {
+        self.state.refresh_rate_secs()
+    }
+
+    /// Gets the refresh rate in seconds.
+    fn get_refresh_rate(&self) -> u32 {
+        self.state.refresh_rate_secs()
+    }
+
+    /// Sets the refresh rate in seconds (2-60).
+    fn set_refresh_rate(&self, secs: u32) -> zbus::fdo::Result<()> {
+        if !(2..=60).contains(&secs) {
+            return Err(zbus::fdo::Error::InvalidArgs(
+                "Refresh rate must be 2-60 seconds".to_string(),
+            ));
+        }
+        self.state.set_refresh_rate_secs(secs);
+        debug!("D-Bus: SetRefreshRate({})", secs);
+        Ok(())
     }
 }
 
