@@ -110,10 +110,7 @@ impl LedDevice {
                 Error::Serial(e)
             })?;
 
-        debug!(
-            "Sending LED packet to {}: {:02X?}",
-            self.port_path, packet
-        );
+        debug!("Sending LED packet to {}: {:02X?}", self.port_path, packet);
 
         // Write all bytes at once, then flush
         port.write_all(&packet).await?;

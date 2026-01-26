@@ -39,3 +39,10 @@ speed = 3
 [canvas]
 width = 320
 height = 170
+
+# Display Face Configuration
+[display]
+# Face to display: "minimal" (text only) or "detailed" (with progress bars)
+face = "detailed"
+# Network interface to monitor (optional - defaults to eth0)
+# network_interface = "wlan0"

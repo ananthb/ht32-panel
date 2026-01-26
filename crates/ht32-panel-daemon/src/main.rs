@@ -4,6 +4,7 @@
 
 mod config;
 mod dbus;
+mod faces;
 mod rendering;
 mod sensors;
 mod state;

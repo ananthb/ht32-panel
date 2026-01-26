@@ -12,7 +12,52 @@ use std::sync::{Mutex, RwLock};
 use tracing::{debug, info};
 
 use crate::config::Config;
+use crate::faces::{self, Face};
 use crate::rendering::Canvas;
+use crate::sensors::{
+    data::SystemData, CpuSensor, DiskSensor, MemorySensor, NetworkSensor, Sensor, SystemInfo,
+};
+
+/// Sensors collection for sampling system data.
+struct Sensors {
+    cpu: CpuSensor,
+    memory: MemorySensor,
+    network: NetworkSensor,
+    disk: DiskSensor,
+    system: SystemInfo,
+}
+
+impl Sensors {
+    fn new(network_interface: &str) -> Self {
+        Self {
+            cpu: CpuSensor::new(),
+            memory: MemorySensor::new(),
+            network: NetworkSensor::new(network_interface),
+            disk: DiskSensor::auto(),
+            system: SystemInfo::new(),
+        }
+    }
+
+    fn sample(&mut self) -> SystemData {
+        // Sample all sensors
+        let cpu_percent = self.cpu.sample();
+        let ram_percent = self.memory.sample();
+        let _ = self.network.sample(); // Updates internal state
+        let _ = self.disk.sample(); // Updates internal state
+
+        SystemData {
+            hostname: self.system.hostname(),
+            time: self.system.time(),
+            uptime: self.system.uptime(),
+            cpu_percent,
+            ram_percent,
+            disk_read_rate: self.disk.read_rate(),
+            disk_write_rate: self.disk.write_rate(),
+            net_rx_rate: self.network.rx_rate(),
+            net_tx_rate: self.network.tx_rate(),
+        }
+    }
+}
 
 /// Shared application state.
 pub struct AppState {
@@ -44,6 +89,12 @@ pub struct AppState {
 
     /// Flag indicating LED update is needed
     needs_led_update: RwLock<bool>,
+
+    /// System sensors
+    sensors: Mutex<Sensors>,
+
+    /// Current display face
+    face: RwLock<Box<dyn Face>>,
 }
 
 impl AppState {
@@ -72,6 +123,22 @@ impl AppState {
         let canvas = Canvas::new(config.canvas.width, config.canvas.height);
         let framebuffer = Framebuffer::new();
 
+        // Initialize sensors with default network interface
+        let network_interface = config
+            .display
+            .network_interface
+            .clone()
+            .unwrap_or_else(|| "eth0".to_string());
+        let sensors = Sensors::new(&network_interface);
+
+        // Create the face based on configuration
+        let face_name = &config.display.face;
+        let face = faces::create_face(face_name).unwrap_or_else(|| {
+            tracing::warn!("Unknown face '{}', falling back to 'detailed'", face_name);
+            faces::create_face("detailed").unwrap()
+        });
+        info!("Using display face: {}", face.name());
+
         Ok(Self {
             led_device_path: config.led.device.clone(),
             led_theme: RwLock::new(config.led.theme),
@@ -84,6 +151,8 @@ impl AppState {
             framebuffer: RwLock::new(framebuffer),
             needs_redraw: RwLock::new(true),
             needs_led_update: RwLock::new(true),
+            sensors: Mutex::new(sensors),
+            face: RwLock::new(face),
         })
     }
 
@@ -168,17 +237,31 @@ impl AppState {
         Ok(())
     }
 
+    /// Samples all sensors and returns the current system data.
+    fn sample_sensors(&self) -> SystemData {
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.sample()
+    }
+
     /// Renders a frame and updates the display.
     pub async fn render_frame(&self) -> Result<()> {
-        let needs_redraw = *self.needs_redraw.read().unwrap();
+        // Always sample sensors and render the face (faces update every frame)
+        let system_data = self.sample_sensors();
 
-        if needs_redraw {
-            // Get canvas and render to framebuffer
+        {
+            // Get canvas and render face
             let mut canvas = self.canvas.write().unwrap();
-            let mut framebuffer = self.framebuffer.write().unwrap();
+            let face = self.face.read().unwrap();
 
-            // Render canvas content (background, widgets)
-            canvas.render();
+            // Clear and render face
+            canvas.clear();
+            face.render(&mut canvas, &system_data);
+        }
+
+        // Render canvas to framebuffer and send to LCD
+        {
+            let canvas = self.canvas.read().unwrap();
+            let mut framebuffer = self.framebuffer.write().unwrap();
             canvas.render_to_framebuffer(&mut framebuffer)?;
 
             // Send to LCD
@@ -186,9 +269,6 @@ impl AppState {
                 let device = lcd.lock().unwrap();
                 device.redraw(&framebuffer)?;
             }
-
-            *self.needs_redraw.write().unwrap() = false;
-            debug!("Frame rendered");
         }
 
         // Handle LED updates
@@ -255,5 +335,21 @@ impl AppState {
     {
         let canvas = self.canvas.read().unwrap();
         f(&canvas)
+    }
+
+    /// Sets the display face.
+    pub fn set_face(&self, name: &str) -> Result<()> {
+        if let Some(new_face) = faces::create_face(name) {
+            *self.face.write().unwrap() = new_face;
+            info!("Display face changed to: {}", name);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Unknown face: {}", name))
+        }
+    }
+
+    /// Gets the current face name.
+    pub fn face_name(&self) -> String {
+        self.face.read().unwrap().name().to_string()
     }
 }

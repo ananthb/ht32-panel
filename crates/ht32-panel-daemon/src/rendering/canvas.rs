@@ -4,6 +4,8 @@ use anyhow::Result;
 use ht32_panel_hw::lcd::framebuffer::{rgb888_to_rgb565, Framebuffer};
 use tiny_skia::{Color, Paint, Pixmap, Rect, Transform};
 
+use super::text::TextRenderer;
+
 /// Widget rectangle.
 #[derive(Debug, Clone)]
 pub struct WidgetRect {
@@ -32,6 +34,7 @@ pub struct Canvas {
     widgets: Vec<Widget>,
     next_widget_id: u32,
     background_color: u32,
+    text_renderer: TextRenderer,
 }
 
 impl Canvas {
@@ -46,6 +49,7 @@ impl Canvas {
             widgets: Vec::new(),
             next_widget_id: 1,
             background_color: 0x000000, // Black
+            text_renderer: TextRenderer::new(),
         }
     }
 
@@ -127,6 +131,29 @@ impl Canvas {
             self.pixmap
                 .fill_rect(rect, &paint, Transform::identity(), None);
         }
+    }
+
+    /// Draws text at the specified position.
+    ///
+    /// # Arguments
+    /// * `x` - X position (left edge of text)
+    /// * `y` - Y position (top edge of text)
+    /// * `text` - The text to render
+    /// * `size` - Font size in pixels
+    /// * `color` - RGB888 color (0xRRGGBB)
+    pub fn draw_text(&mut self, x: i32, y: i32, text: &str, size: f32, color: u32) {
+        self.text_renderer
+            .draw_text(&mut self.pixmap, x, y, text, size, color);
+    }
+
+    /// Returns the width of text when rendered at the specified size.
+    pub fn text_width(&self, text: &str, size: f32) -> i32 {
+        self.text_renderer.text_width(text, size)
+    }
+
+    /// Returns the line height for the specified font size.
+    pub fn line_height(&self, size: f32) -> i32 {
+        self.text_renderer.line_height(size)
     }
 
     /// Renders all widgets to the internal pixmap.

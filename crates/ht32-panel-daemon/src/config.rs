@@ -44,6 +44,10 @@ pub struct Config {
     /// Canvas configuration
     #[serde(default)]
     pub canvas: CanvasConfig,
+
+    /// Display face configuration
+    #[serde(default)]
+    pub display: DisplayConfig,
 }
 
 /// Web server configuration.
@@ -156,6 +160,31 @@ impl Default for CanvasConfig {
     }
 }
 
+/// Display face configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisplayConfig {
+    /// Display face name ("minimal" or "detailed")
+    #[serde(default = "default_face")]
+    pub face: String,
+
+    /// Network interface to monitor (e.g., "eth0", "wlan0")
+    #[serde(default)]
+    pub network_interface: Option<String>,
+}
+
+impl Default for DisplayConfig {
+    fn default() -> Self {
+        Self {
+            face: default_face(),
+            network_interface: None,
+        }
+    }
+}
+
+fn default_face() -> String {
+    "detailed".to_string()
+}
+
 // Default value functions
 fn default_listen() -> String {
     "[::1]:8686".to_string()
@@ -230,6 +259,7 @@ impl Default for Config {
             lcd: LcdConfig::default(),
             led: LedConfig::default(),
             canvas: CanvasConfig::default(),
+            display: DisplayConfig::default(),
         }
     }
 }

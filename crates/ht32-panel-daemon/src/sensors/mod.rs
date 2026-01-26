@@ -5,12 +5,17 @@
 #![allow(dead_code, unused_imports)]
 
 mod cpu;
+pub mod data;
+mod disk;
 mod memory;
 mod network;
+mod system;
 
 pub use cpu::CpuSensor;
+pub use disk::DiskSensor;
 pub use memory::MemorySensor;
 pub use network::NetworkSensor;
+pub use system::SystemInfo;
 
 /// Trait for all sensors.
 pub trait Sensor: Send + Sync {

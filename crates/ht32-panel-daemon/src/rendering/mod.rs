@@ -3,5 +3,6 @@
 #![allow(dead_code)]
 
 mod canvas;
+mod text;
 
 pub use canvas::{Canvas, WidgetRect};
