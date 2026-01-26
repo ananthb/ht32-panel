@@ -34,6 +34,13 @@ struct OrientationTemplate {
     current: String,
 }
 
+/// Face partial template.
+#[derive(Template)]
+#[template(path = "partials/face.html")]
+struct FaceTemplate {
+    current: String,
+}
+
 /// LED controls partial template.
 #[derive(Template)]
 #[template(path = "partials/led.html")]
@@ -70,6 +77,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Partials for HTMX
         .route("/status", get(status))
         .route("/orientation", get(orientation_get).post(orientation_set))
+        .route("/face", get(face_get).post(face_set))
         .route("/led", get(led_get).post(led_set))
         .route("/widgets", get(widgets_get))
         .route("/widgets/add", post(widget_add))
@@ -131,6 +139,28 @@ async fn orientation_set(
     }
     let current = state.orientation().to_string();
     Html(OrientationTemplate { current }.render().unwrap())
+}
+
+/// GET /face - Face controls partial
+async fn face_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let current = state.face_name();
+    Html(FaceTemplate { current }.render().unwrap())
+}
+
+/// Form data for face.
+#[derive(Deserialize)]
+struct FaceForm {
+    face: String,
+}
+
+/// POST /face - Set face
+async fn face_set(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<FaceForm>,
+) -> impl IntoResponse {
+    let _ = state.set_face(&form.face);
+    let current = state.face_name();
+    Html(FaceTemplate { current }.render().unwrap())
 }
 
 /// GET /led - LED controls partial

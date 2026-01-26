@@ -80,14 +80,19 @@ impl Daemon1Interface {
         Ok(())
     }
 
-    /// Sends a heartbeat to keep the LCD alive.
-    fn heartbeat(&self) -> zbus::fdo::Result<()> {
+    /// Sets the display face.
+    fn set_face(&self, face: &str) -> zbus::fdo::Result<()> {
         self.state
-            .send_heartbeat()
-            .map_err(|e| zbus::fdo::Error::Failed(e.to_string()))?;
+            .set_face(face)
+            .map_err(|e| zbus::fdo::Error::InvalidArgs(e.to_string()))?;
 
-        debug!("D-Bus: Heartbeat");
+        debug!("D-Bus: SetFace({})", face);
         Ok(())
+    }
+
+    /// Gets the current face name.
+    fn get_face(&self) -> String {
+        self.state.face_name()
     }
 
     /// Returns the current framebuffer as PNG data.

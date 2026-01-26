@@ -21,6 +21,10 @@ pub struct Config {
     #[serde(default = "default_theme")]
     pub theme: String,
 
+    /// State directory for persisting runtime state
+    #[serde(default = "default_state_dir")]
+    pub state_dir: String,
+
     /// Render loop poll interval in milliseconds
     #[serde(default = "default_poll")]
     pub poll: u64,
@@ -45,7 +49,7 @@ pub struct Config {
     #[serde(default)]
     pub canvas: CanvasConfig,
 
-    /// Display face configuration
+    /// Display configuration
     #[serde(default)]
     pub display: DisplayConfig,
 }
@@ -160,29 +164,12 @@ impl Default for CanvasConfig {
     }
 }
 
-/// Display face configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Display configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DisplayConfig {
-    /// Display face name ("minimal" or "detailed")
-    #[serde(default = "default_face")]
-    pub face: String,
-
     /// Network interface to monitor (e.g., "eth0", "wlan0")
     #[serde(default)]
     pub network_interface: Option<String>,
-}
-
-impl Default for DisplayConfig {
-    fn default() -> Self {
-        Self {
-            face: default_face(),
-            network_interface: None,
-        }
-    }
-}
-
-fn default_face() -> String {
-    "detailed".to_string()
 }
 
 // Default value functions
@@ -192,6 +179,20 @@ fn default_listen() -> String {
 
 fn default_theme() -> String {
     "themes/default.toml".to_string()
+}
+
+fn default_state_dir() -> String {
+    // Check STATE_DIRECTORY first (set by systemd when StateDirectory= is configured)
+    // Then fall back to XDG state directory or /var/lib
+    if let Ok(state_dir) = std::env::var("STATE_DIRECTORY") {
+        state_dir
+    } else if let Ok(state_home) = std::env::var("XDG_STATE_HOME") {
+        format!("{}/ht32-panel", state_home)
+    } else if let Ok(home) = std::env::var("HOME") {
+        format!("{}/.local/state/ht32-panel", home)
+    } else {
+        "/var/lib/ht32-panel".to_string()
+    }
 }
 
 fn default_poll() -> u64 {
@@ -253,6 +254,7 @@ impl Default for Config {
             web: WebConfig::default(),
             dbus: DbusConfig::default(),
             theme: default_theme(),
+            state_dir: default_state_dir(),
             poll: default_poll(),
             refresh: default_refresh(),
             heartbeat: default_heartbeat(),

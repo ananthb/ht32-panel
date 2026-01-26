@@ -22,8 +22,11 @@ trait Daemon1 {
     /// Clears the display to a solid color.
     fn clear_display(&self, color: &str) -> zbus::Result<()>;
 
-    /// Sends a heartbeat to keep the LCD alive.
-    fn heartbeat(&self) -> zbus::Result<()>;
+    /// Sets the display face.
+    fn set_face(&self, face: &str) -> zbus::Result<()>;
+
+    /// Gets the current face name.
+    fn get_face(&self) -> zbus::Result<String>;
 
     /// Sets LED parameters.
     fn set_led(&self, theme: u8, intensity: u8, speed: u8) -> zbus::Result<()>;
@@ -123,12 +126,20 @@ impl DaemonClient {
             .context("Failed to clear display via D-Bus")
     }
 
-    /// Sends a heartbeat.
-    pub async fn heartbeat(&self) -> Result<()> {
+    /// Sets the display face.
+    pub async fn set_face(&self, face: &str) -> Result<()> {
         self.proxy
-            .heartbeat()
+            .set_face(face)
             .await
-            .context("Failed to send heartbeat via D-Bus")
+            .context("Failed to set face via D-Bus")
+    }
+
+    /// Gets the current face name.
+    pub async fn get_face(&self) -> Result<String> {
+        self.proxy
+            .get_face()
+            .await
+            .context("Failed to get face via D-Bus")
     }
 
     /// Sets LED parameters.

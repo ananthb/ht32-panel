@@ -1,0 +1,8 @@
+<form hx-post="/face" hx-target="#face-controls" hx-swap="innerHTML">
+    <div class="controls">
+        <button type="submit" name="face" value="minimal"
+                class="btn{% if current == "minimal" %} active{% endif %}">Minimal</button>
+        <button type="submit" name="face" value="detailed"
+                class="btn{% if current == "detailed" %} active{% endif %}">Detailed</button>
+    </div>
+</form>

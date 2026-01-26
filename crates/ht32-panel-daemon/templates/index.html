@@ -22,6 +22,13 @@
 </div>
 
 <div class="card">
+    <h2>Display Face</h2>
+    <div id="face-controls" hx-get="/face" hx-trigger="load" hx-swap="innerHTML">
+        Loading...
+    </div>
+</div>
+
+<div class="card">
     <h2>LED Strip</h2>
     <div id="led-controls" hx-get="/led" hx-trigger="load" hx-swap="innerHTML">
         Loading...

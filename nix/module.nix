@@ -275,6 +275,10 @@ in
           Restart = "on-failure";
           RestartSec = 5;
 
+          # State directory for persistent data (face selection, etc.)
+          StateDirectory = "ht32-panel";
+          StateDirectoryMode = "0750";
+
           # Hardening (relaxed for hardware access)
           NoNewPrivileges = true;
           ProtectSystem = "full";

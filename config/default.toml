@@ -40,9 +40,10 @@ speed = 3
 width = 320
 height = 170
 
-# Display Face Configuration
+# Display Configuration
 [display]
-# Face to display: "minimal" (text only) or "detailed" (with progress bars)
-face = "detailed"
 # Network interface to monitor (optional - defaults to eth0)
 # network_interface = "wlan0"
+
+# Note: Display face is stored in the state directory, not config.
+# Use `ht32panelctl lcd face <name>` to change it.

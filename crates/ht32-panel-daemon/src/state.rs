@@ -8,8 +8,9 @@ use ht32_panel_hw::{
     led::{LedDevice, LedTheme},
     Orientation,
 };
+use std::path::PathBuf;
 use std::sync::{Mutex, RwLock};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::config::Config;
 use crate::faces::{self, Face};
@@ -64,6 +65,9 @@ pub struct AppState {
     /// Configuration
     config: RwLock<Config>,
 
+    /// State directory for persisting runtime state
+    state_dir: PathBuf,
+
     /// LCD device (optional - may not be present)
     lcd: Option<Mutex<LcdDevice>>,
 
@@ -100,22 +104,28 @@ pub struct AppState {
 impl AppState {
     /// Creates a new application state.
     pub fn new(config: Config) -> Result<Self> {
+        // Setup state directory
+        let state_dir = PathBuf::from(&config.state_dir);
+        if let Err(e) = std::fs::create_dir_all(&state_dir) {
+            warn!("Failed to create state directory {:?}: {}", state_dir, e);
+        }
+
         // Try to open LCD device
         let lcd = match LcdDevice::open() {
             Ok(device) => {
                 // Send initial heartbeat to wake up the device
                 if let Err(e) = device.heartbeat() {
-                    tracing::warn!("Failed to send initial heartbeat: {}", e);
+                    warn!("Failed to send initial heartbeat: {}", e);
                 }
                 // Set initial orientation
                 if let Err(e) = device.set_orientation(Orientation::default()) {
-                    tracing::warn!("Failed to set initial orientation: {}", e);
+                    warn!("Failed to set initial orientation: {}", e);
                 }
                 info!("LCD device opened successfully");
                 Some(Mutex::new(device))
             }
             Err(e) => {
-                tracing::warn!("LCD device not found: {}. Running in headless mode.", e);
+                warn!("LCD device not found: {}. Running in headless mode.", e);
                 None
             }
         };
@@ -131,10 +141,11 @@ impl AppState {
             .unwrap_or_else(|| "eth0".to_string());
         let sensors = Sensors::new(&network_interface);
 
-        // Create the face based on configuration
-        let face_name = &config.display.face;
-        let face = faces::create_face(face_name).unwrap_or_else(|| {
-            tracing::warn!("Unknown face '{}', falling back to 'detailed'", face_name);
+        // Load face from state file, or use default
+        let face_name =
+            Self::load_face_from_state(&state_dir).unwrap_or_else(|| "detailed".to_string());
+        let face = faces::create_face(&face_name).unwrap_or_else(|| {
+            warn!("Unknown face '{}', falling back to 'detailed'", face_name);
             faces::create_face("detailed").unwrap()
         });
         info!("Using display face: {}", face.name());
@@ -144,6 +155,7 @@ impl AppState {
             led_theme: RwLock::new(config.led.theme),
             led_intensity: RwLock::new(config.led.intensity),
             led_speed: RwLock::new(config.led.speed),
+            state_dir,
             config: RwLock::new(config),
             lcd,
             orientation: RwLock::new(Orientation::default()),
@@ -154,6 +166,23 @@ impl AppState {
             sensors: Mutex::new(sensors),
             face: RwLock::new(face),
         })
+    }
+
+    /// Loads the face name from the state file.
+    fn load_face_from_state(state_dir: &std::path::Path) -> Option<String> {
+        let face_file = state_dir.join("face");
+        std::fs::read_to_string(&face_file)
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+
+    /// Saves the face name to the state file.
+    fn save_face_to_state(&self, face_name: &str) {
+        let face_file = self.state_dir.join("face");
+        if let Err(e) = std::fs::write(&face_file, face_name) {
+            warn!("Failed to save face to {:?}: {}", face_file, e);
+        }
     }
 
     /// Returns a reference to the configuration.
@@ -341,6 +370,7 @@ impl AppState {
     pub fn set_face(&self, name: &str) -> Result<()> {
         if let Some(new_face) = faces::create_face(name) {
             *self.face.write().unwrap() = new_face;
+            self.save_face_to_state(name);
             info!("Display face changed to: {}", name);
             Ok(())
         } else {

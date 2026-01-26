@@ -245,6 +245,11 @@ in
         Restart = "on-failure";
         RestartSec = 5;
 
+        # State directory for persistent data (face selection, etc.)
+        # For user services, this creates ~/.local/state/ht32-panel
+        StateDirectory = "ht32-panel";
+        StateDirectoryMode = "0750";
+
         # Hardening (user service compatible)
         NoNewPrivileges = true;
         ProtectSystem = "strict";

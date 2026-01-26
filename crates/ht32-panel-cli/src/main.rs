@@ -70,8 +70,11 @@ enum LcdCommands {
         #[arg(long, default_value = "#000000")]
         color: String,
     },
-    /// Send a heartbeat to keep the device alive
-    Heartbeat,
+    /// Set or show the current face
+    Face {
+        /// Face name: minimal, detailed (omit to show current)
+        face: Option<String>,
+    },
     /// Show device information
     Info,
 }
@@ -139,16 +142,23 @@ async fn handle_lcd(action: LcdCommands, client: &DaemonClient) -> Result<()> {
             client.clear_display(&color).await?;
             println!("Display cleared to: {}", color);
         }
-        LcdCommands::Heartbeat => {
-            client.heartbeat().await?;
-            println!("Heartbeat sent");
+        LcdCommands::Face { face } => {
+            if let Some(face_name) = face {
+                client.set_face(&face_name).await?;
+                println!("Face set to: {}", face_name);
+            } else {
+                let current = client.get_face().await?;
+                println!("Current face: {}", current);
+            }
         }
         LcdCommands::Info => {
             let connected = client.is_connected().await?;
             let orientation = client.get_orientation().await?;
+            let face = client.get_face().await?;
             println!("LCD Status:");
             println!("  Connected: {}", if connected { "yes" } else { "no" });
             println!("  Orientation: {}", orientation);
+            println!("  Face: {}", face);
         }
     }
 
