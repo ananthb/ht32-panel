@@ -50,6 +50,21 @@ struct LedTemplate {
     speed: u8,
 }
 
+/// Colors partial template.
+#[derive(Template)]
+#[template(path = "partials/colors.html")]
+struct ColorsTemplate {
+    background_color: String,
+    foreground_color: String,
+}
+
+/// Background image partial template.
+#[derive(Template)]
+#[template(path = "partials/background.html")]
+struct BackgroundTemplate {
+    background_image: String,
+}
+
 /// Widget info for template.
 struct WidgetInfo {
     id: u32,
@@ -79,6 +94,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/orientation", get(orientation_get).post(orientation_set))
         .route("/face", get(face_get).post(face_set))
         .route("/led", get(led_get).post(led_set))
+        .route("/colors", get(colors_get).post(colors_set))
+        .route("/background", get(background_get).post(background_set))
+        .route("/background/clear", post(background_clear))
         .route("/widgets", get(widgets_get))
         .route("/widgets/add", post(widget_add))
         .route("/widgets/delete", post(widget_delete))
@@ -212,6 +230,88 @@ async fn led_set(
         .render()
         .unwrap(),
     )
+}
+
+/// GET /colors - Color controls partial
+async fn colors_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let background_color = format!("#{:06X}", state.background_color());
+    let foreground_color = format!("#{:06X}", state.foreground_color());
+    Html(
+        ColorsTemplate {
+            background_color,
+            foreground_color,
+        }
+        .render()
+        .unwrap(),
+    )
+}
+
+/// Form data for colors.
+#[derive(Deserialize)]
+struct ColorsForm {
+    background_color: String,
+    foreground_color: String,
+}
+
+/// POST /colors - Set colors
+async fn colors_set(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<ColorsForm>,
+) -> impl IntoResponse {
+    let _ = state.set_background_color_hex(&form.background_color);
+    let _ = state.set_foreground_color_hex(&form.foreground_color);
+
+    let background_color = format!("#{:06X}", state.background_color());
+    let foreground_color = format!("#{:06X}", state.foreground_color());
+    Html(
+        ColorsTemplate {
+            background_color,
+            foreground_color,
+        }
+        .render()
+        .unwrap(),
+    )
+}
+
+/// GET /background - Background image controls partial
+async fn background_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let background_image = state
+        .background_image()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    Html(BackgroundTemplate { background_image }.render().unwrap())
+}
+
+/// Form data for background image.
+#[derive(Deserialize)]
+struct BackgroundForm {
+    background_image: String,
+}
+
+/// POST /background - Set background image
+async fn background_set(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<BackgroundForm>,
+) -> impl IntoResponse {
+    let path = if form.background_image.is_empty() {
+        None
+    } else {
+        Some(std::path::PathBuf::from(&form.background_image))
+    };
+    state.set_background_image(path);
+
+    let background_image = state
+        .background_image()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    Html(BackgroundTemplate { background_image }.render().unwrap())
+}
+
+/// POST /background/clear - Clear background image
+async fn background_clear(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    state.set_background_image(None);
+    let background_image = String::new();
+    Html(BackgroundTemplate { background_image }.render().unwrap())
 }
 
 /// GET /widgets - Widgets list partial

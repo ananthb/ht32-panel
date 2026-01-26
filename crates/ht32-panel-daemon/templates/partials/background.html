@@ -1,0 +1,13 @@
+<form hx-post="/background" hx-target="#background-controls" hx-swap="innerHTML">
+    <div class="input-group">
+        <label for="bg-image">Image path:</label>
+        <input type="text" id="bg-image" name="background_image" value="{{ background_image }}"
+               placeholder="/path/to/image.png">
+        <button type="submit" class="btn">Set</button>
+    </div>
+</form>
+{% if !background_image.is_empty() %}
+<form hx-post="/background/clear" hx-target="#background-controls" hx-swap="innerHTML" style="margin-top: 0.5rem;">
+    <button type="submit" class="btn">Clear Image</button>
+</form>
+{% endif %}

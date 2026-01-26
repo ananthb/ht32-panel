@@ -8,7 +8,8 @@ use ht32_panel_hw::{
     led::{LedDevice, LedTheme},
     Orientation,
 };
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
 
@@ -18,6 +19,63 @@ use crate::rendering::Canvas;
 use crate::sensors::{
     data::SystemData, CpuSensor, DiskSensor, MemorySensor, NetworkSensor, Sensor, SystemInfo,
 };
+
+/// Display settings persisted to state directory.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisplaySettings {
+    /// Current face name.
+    #[serde(default = "default_face")]
+    pub face: String,
+
+    /// Display orientation.
+    #[serde(default)]
+    pub orientation: String,
+
+    /// Background color (RGB888 hex string, e.g., "#000000").
+    #[serde(default = "default_bg_color")]
+    pub background_color: String,
+
+    /// Foreground/text color (RGB888 hex string, e.g., "#FFFFFF").
+    #[serde(default = "default_fg_color")]
+    pub foreground_color: String,
+
+    /// Optional background image path.
+    #[serde(default)]
+    pub background_image: Option<String>,
+}
+
+fn default_face() -> String {
+    "detailed".to_string()
+}
+
+fn default_bg_color() -> String {
+    "#000000".to_string()
+}
+
+fn default_fg_color() -> String {
+    "#FFFFFF".to_string()
+}
+
+/// Parse a hex color string (e.g., "#FFFFFF" or "FFFFFF") to RGB888.
+fn parse_hex_color(hex: &str) -> Option<u32> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    u32::from_str_radix(hex, 16).ok()
+}
+
+impl Default for DisplaySettings {
+    fn default() -> Self {
+        Self {
+            face: default_face(),
+            orientation: "landscape".to_string(),
+            background_color: default_bg_color(),
+            foreground_color: default_fg_color(),
+            background_image: None,
+        }
+    }
+}
 
 /// Sensors collection for sampling system data.
 struct Sensors {
@@ -99,6 +157,15 @@ pub struct AppState {
 
     /// Current display face
     face: RwLock<Box<dyn Face>>,
+
+    /// Background color (RGB888)
+    background_color: RwLock<u32>,
+
+    /// Foreground color (RGB888)
+    foreground_color: RwLock<u32>,
+
+    /// Background image path (optional)
+    background_image: RwLock<Option<PathBuf>>,
 }
 
 impl AppState {
@@ -110,6 +177,12 @@ impl AppState {
             warn!("Failed to create state directory {:?}: {}", state_dir, e);
         }
 
+        // Load display settings from state
+        let settings = Self::load_display_settings(&state_dir);
+
+        // Parse orientation from settings
+        let orientation: Orientation = settings.orientation.parse().unwrap_or_default();
+
         // Try to open LCD device
         let lcd = match LcdDevice::open() {
             Ok(device) => {
@@ -117,8 +190,8 @@ impl AppState {
                 if let Err(e) = device.heartbeat() {
                     warn!("Failed to send initial heartbeat: {}", e);
                 }
-                // Set initial orientation
-                if let Err(e) = device.set_orientation(Orientation::default()) {
+                // Set initial orientation from state
+                if let Err(e) = device.set_orientation(orientation) {
                     warn!("Failed to set initial orientation: {}", e);
                 }
                 info!("LCD device opened successfully");
@@ -130,7 +203,7 @@ impl AppState {
             }
         };
 
-        let canvas = Canvas::new(config.canvas.width, config.canvas.height);
+        let mut canvas = Canvas::new(config.canvas.width, config.canvas.height);
         let framebuffer = Framebuffer::new();
 
         // Initialize sensors with default network interface
@@ -141,14 +214,29 @@ impl AppState {
             .unwrap_or_else(|| "eth0".to_string());
         let sensors = Sensors::new(&network_interface);
 
-        // Load face from state file, or use default
-        let face_name =
-            Self::load_face_from_state(&state_dir).unwrap_or_else(|| "detailed".to_string());
-        let face = faces::create_face(&face_name).unwrap_or_else(|| {
-            warn!("Unknown face '{}', falling back to 'detailed'", face_name);
+        // Load face from settings
+        let face = faces::create_face(&settings.face).unwrap_or_else(|| {
+            warn!(
+                "Unknown face '{}', falling back to 'detailed'",
+                settings.face
+            );
             faces::create_face("detailed").unwrap()
         });
         info!("Using display face: {}", face.name());
+
+        // Parse colors
+        let bg_color = parse_hex_color(&settings.background_color).unwrap_or(0x000000);
+        let fg_color = parse_hex_color(&settings.foreground_color).unwrap_or(0xFFFFFF);
+
+        // Set canvas background
+        canvas.set_background(bg_color);
+
+        // Parse background image path
+        let bg_image = settings.background_image.map(PathBuf::from);
+
+        info!("Display orientation: {}", orientation);
+        info!("Background color: #{:06X}", bg_color);
+        info!("Foreground color: #{:06X}", fg_color);
 
         Ok(Self {
             led_device_path: config.led.device.clone(),
@@ -158,30 +246,55 @@ impl AppState {
             state_dir,
             config: RwLock::new(config),
             lcd,
-            orientation: RwLock::new(Orientation::default()),
+            orientation: RwLock::new(orientation),
             canvas: RwLock::new(canvas),
             framebuffer: RwLock::new(framebuffer),
             needs_redraw: RwLock::new(true),
             needs_led_update: RwLock::new(true),
             sensors: Mutex::new(sensors),
             face: RwLock::new(face),
+            background_color: RwLock::new(bg_color),
+            foreground_color: RwLock::new(fg_color),
+            background_image: RwLock::new(bg_image),
         })
     }
 
-    /// Loads the face name from the state file.
-    fn load_face_from_state(state_dir: &std::path::Path) -> Option<String> {
-        let face_file = state_dir.join("face");
-        std::fs::read_to_string(&face_file)
-            .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+    /// Loads display settings from state directory.
+    fn load_display_settings(state_dir: &Path) -> DisplaySettings {
+        let settings_file = state_dir.join("display.toml");
+        if let Ok(content) = std::fs::read_to_string(&settings_file) {
+            if let Ok(settings) = toml::from_str(&content) {
+                return settings;
+            }
+        }
+        DisplaySettings::default()
     }
 
-    /// Saves the face name to the state file.
-    fn save_face_to_state(&self, face_name: &str) {
-        let face_file = self.state_dir.join("face");
-        if let Err(e) = std::fs::write(&face_file, face_name) {
-            warn!("Failed to save face to {:?}: {}", face_file, e);
+    /// Saves display settings to state directory.
+    fn save_display_settings(&self) {
+        let settings = DisplaySettings {
+            face: self.face.read().unwrap().name().to_string(),
+            orientation: self.orientation.read().unwrap().to_string(),
+            background_color: format!("#{:06X}", *self.background_color.read().unwrap()),
+            foreground_color: format!("#{:06X}", *self.foreground_color.read().unwrap()),
+            background_image: self
+                .background_image
+                .read()
+                .unwrap()
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
+        };
+
+        let settings_file = self.state_dir.join("display.toml");
+        match toml::to_string_pretty(&settings) {
+            Ok(content) => {
+                if let Err(e) = std::fs::write(&settings_file, content) {
+                    warn!("Failed to save display settings: {}", e);
+                }
+            }
+            Err(e) => {
+                warn!("Failed to serialize display settings: {}", e);
+            }
         }
     }
 
@@ -217,6 +330,7 @@ impl AppState {
         }
         *self.orientation.write().unwrap() = orientation;
         *self.needs_redraw.write().unwrap() = true;
+        self.save_display_settings();
         info!("Orientation set to: {}", orientation);
         Ok(())
     }
@@ -370,7 +484,7 @@ impl AppState {
     pub fn set_face(&self, name: &str) -> Result<()> {
         if let Some(new_face) = faces::create_face(name) {
             *self.face.write().unwrap() = new_face;
-            self.save_face_to_state(name);
+            self.save_display_settings();
             info!("Display face changed to: {}", name);
             Ok(())
         } else {
@@ -381,5 +495,80 @@ impl AppState {
     /// Gets the current face name.
     pub fn face_name(&self) -> String {
         self.face.read().unwrap().name().to_string()
+    }
+
+    /// Gets the background color (RGB888).
+    pub fn background_color(&self) -> u32 {
+        *self.background_color.read().unwrap()
+    }
+
+    /// Sets the background color (RGB888).
+    pub fn set_background_color(&self, color: u32) {
+        *self.background_color.write().unwrap() = color;
+        self.canvas.write().unwrap().set_background(color);
+        *self.needs_redraw.write().unwrap() = true;
+        self.save_display_settings();
+        info!("Background color set to #{:06X}", color);
+    }
+
+    /// Sets the background color from a hex string (e.g., "#FFFFFF").
+    pub fn set_background_color_hex(&self, hex: &str) -> Result<()> {
+        let color =
+            parse_hex_color(hex).ok_or_else(|| anyhow::anyhow!("Invalid hex color: {}", hex))?;
+        self.set_background_color(color);
+        Ok(())
+    }
+
+    /// Gets the foreground/text color (RGB888).
+    pub fn foreground_color(&self) -> u32 {
+        *self.foreground_color.read().unwrap()
+    }
+
+    /// Sets the foreground/text color (RGB888).
+    pub fn set_foreground_color(&self, color: u32) {
+        *self.foreground_color.write().unwrap() = color;
+        *self.needs_redraw.write().unwrap() = true;
+        self.save_display_settings();
+        info!("Foreground color set to #{:06X}", color);
+    }
+
+    /// Sets the foreground color from a hex string (e.g., "#FFFFFF").
+    pub fn set_foreground_color_hex(&self, hex: &str) -> Result<()> {
+        let color =
+            parse_hex_color(hex).ok_or_else(|| anyhow::anyhow!("Invalid hex color: {}", hex))?;
+        self.set_foreground_color(color);
+        Ok(())
+    }
+
+    /// Gets the background image path (if any).
+    pub fn background_image(&self) -> Option<PathBuf> {
+        self.background_image.read().unwrap().clone()
+    }
+
+    /// Sets the background image path.
+    pub fn set_background_image(&self, path: Option<PathBuf>) {
+        *self.background_image.write().unwrap() = path.clone();
+        *self.needs_redraw.write().unwrap() = true;
+        self.save_display_settings();
+        match path {
+            Some(p) => info!("Background image set to {:?}", p),
+            None => info!("Background image cleared"),
+        }
+    }
+
+    /// Gets the current display settings as a struct.
+    pub fn display_settings(&self) -> DisplaySettings {
+        DisplaySettings {
+            face: self.face.read().unwrap().name().to_string(),
+            orientation: self.orientation.read().unwrap().to_string(),
+            background_color: format!("#{:06X}", *self.background_color.read().unwrap()),
+            foreground_color: format!("#{:06X}", *self.foreground_color.read().unwrap()),
+            background_image: self
+                .background_image
+                .read()
+                .unwrap()
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
+        }
     }
 }

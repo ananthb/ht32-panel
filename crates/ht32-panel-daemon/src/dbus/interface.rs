@@ -19,6 +19,8 @@ pub enum DaemonSignals {
     OrientationChanged,
     /// LED settings changed.
     LedChanged,
+    /// Display settings (colors, background image, etc.) changed.
+    DisplaySettingsChanged,
 }
 
 /// D-Bus interface implementation for the HT32 Panel Daemon.
@@ -93,6 +95,67 @@ impl Daemon1Interface {
     /// Gets the current face name.
     fn get_face(&self) -> String {
         self.state.face_name()
+    }
+
+    /// Gets the background color as a hex string (e.g., "#000000").
+    fn get_background_color(&self) -> String {
+        format!("#{:06X}", self.state.background_color())
+    }
+
+    /// Sets the background color from a hex string (e.g., "#000000").
+    fn set_background_color(&self, color: &str) -> zbus::fdo::Result<()> {
+        self.state
+            .set_background_color_hex(color)
+            .map_err(|e| zbus::fdo::Error::InvalidArgs(e.to_string()))?;
+
+        let _ = self.signal_tx.send(DaemonSignals::DisplaySettingsChanged);
+        debug!("D-Bus: SetBackgroundColor({})", color);
+        Ok(())
+    }
+
+    /// Gets the foreground/text color as a hex string (e.g., "#FFFFFF").
+    fn get_foreground_color(&self) -> String {
+        format!("#{:06X}", self.state.foreground_color())
+    }
+
+    /// Sets the foreground/text color from a hex string (e.g., "#FFFFFF").
+    fn set_foreground_color(&self, color: &str) -> zbus::fdo::Result<()> {
+        self.state
+            .set_foreground_color_hex(color)
+            .map_err(|e| zbus::fdo::Error::InvalidArgs(e.to_string()))?;
+
+        let _ = self.signal_tx.send(DaemonSignals::DisplaySettingsChanged);
+        debug!("D-Bus: SetForegroundColor({})", color);
+        Ok(())
+    }
+
+    /// Gets the background image path (empty string if none).
+    fn get_background_image(&self) -> String {
+        self.state
+            .background_image()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Sets the background image path.
+    fn set_background_image(&self, path: &str) -> zbus::fdo::Result<()> {
+        let bg_path = if path.is_empty() {
+            None
+        } else {
+            Some(std::path::PathBuf::from(path))
+        };
+        self.state.set_background_image(bg_path);
+
+        let _ = self.signal_tx.send(DaemonSignals::DisplaySettingsChanged);
+        debug!("D-Bus: SetBackgroundImage({})", path);
+        Ok(())
+    }
+
+    /// Clears the background image.
+    fn clear_background_image(&self) {
+        self.state.set_background_image(None);
+        let _ = self.signal_tx.send(DaemonSignals::DisplaySettingsChanged);
+        debug!("D-Bus: ClearBackgroundImage");
     }
 
     /// Returns the current framebuffer as PNG data.
@@ -192,6 +255,33 @@ impl Daemon1Interface {
     #[zbus(property)]
     fn led_speed(&self) -> u8 {
         self.state.led_settings().2
+    }
+
+    /// Current background color (hex string).
+    #[zbus(property)]
+    fn background_color(&self) -> String {
+        format!("#{:06X}", self.state.background_color())
+    }
+
+    /// Current foreground/text color (hex string).
+    #[zbus(property)]
+    fn foreground_color(&self) -> String {
+        format!("#{:06X}", self.state.foreground_color())
+    }
+
+    /// Current background image path (empty if none).
+    #[zbus(property)]
+    fn background_image(&self) -> String {
+        self.state
+            .background_image()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Current display face name.
+    #[zbus(property)]
+    fn face(&self) -> String {
+        self.state.face_name()
     }
 }
 

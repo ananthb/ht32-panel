@@ -22,6 +22,20 @@
 </div>
 
 <div class="card">
+    <h2>Colors</h2>
+    <div id="color-controls" hx-get="/colors" hx-trigger="load" hx-swap="innerHTML">
+        Loading...
+    </div>
+</div>
+
+<div class="card">
+    <h2>Background Image</h2>
+    <div id="background-controls" hx-get="/background" hx-trigger="load" hx-swap="innerHTML">
+        Loading...
+    </div>
+</div>
+
+<div class="card">
     <h2>Display Face</h2>
     <div id="face-controls" hx-get="/face" hx-trigger="load" hx-swap="innerHTML">
         Loading...

@@ -1,0 +1,12 @@
+<form hx-post="/colors" hx-target="#color-controls" hx-swap="innerHTML" hx-trigger="change">
+    <div class="color-group">
+        <label for="bg-color">Background:</label>
+        <input type="color" id="bg-color" name="background_color" value="{{ background_color }}">
+        <span class="color-value">{{ background_color }}</span>
+    </div>
+    <div class="color-group">
+        <label for="fg-color">Foreground:</label>
+        <input type="color" id="fg-color" name="foreground_color" value="{{ foreground_color }}">
+        <span class="color-value">{{ foreground_color }}</span>
+    </div>
+</form>
