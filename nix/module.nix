@@ -275,48 +275,24 @@ in
           Restart = "on-failure";
           RestartSec = 5;
 
-          # Hardening
+          # Hardening (relaxed for hardware access)
           NoNewPrivileges = true;
-          ProtectSystem = "strict";
+          ProtectSystem = "full";
           ProtectHome = true;
           PrivateTmp = true;
-          ProtectKernelTunables = true;
           ProtectKernelModules = true;
           ProtectKernelLogs = true;
           ProtectControlGroups = true;
           ProtectClock = true;
           ProtectHostname = true;
-          ProtectProc = "invisible";
-          ProcSubset = "pid";
           RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
-          RestrictNamespaces = true;
           RestrictRealtime = true;
           RestrictSUIDSGID = true;
           LockPersonality = true;
-          MemoryDenyWriteExecute = true;
           SystemCallArchitectures = "native";
-          SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
-          CapabilityBoundingSet = "";
-
-          # Device access for LCD (hidraw) and LED (serial)
-          DevicePolicy = "closed";
-          DeviceAllow = [
-            "/dev/hidraw* rw"
-            "/dev/ttyUSB* rw"
-            "/dev/ttyACM* rw"
-            "char-usb_device rw"
-          ];
 
           # Supplementary groups for device access
           SupplementaryGroups = [ "dialout" ];
-
-          # Allow read access to sysfs for device enumeration (hidapi needs this)
-          # ProtectSystem=strict makes paths read-only, but we need bind mounts for /sys
-          BindReadOnlyPaths = [
-            "/sys/class/hidraw"
-            "/sys/bus/usb"
-            "/sys/devices"
-          ];
         };
       };
 
