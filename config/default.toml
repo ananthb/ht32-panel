@@ -19,21 +19,14 @@ refresh = 1600
 # Heartbeat interval (milliseconds)
 heartbeat = 60000
 
-# LCD Configuration
-[lcd]
-# Device path or "auto" for auto-detection by VID:PID
-device = "auto"
-
-# LED Configuration
-[led]
+# Device Configuration
+[devices]
+# LCD device path or "auto" for auto-detection by VID:PID
+lcd = "auto"
 # Serial port path for LED controller (CH340)
-device = "/dev/ttyUSB0"
-# Theme: 1=rainbow, 2=breathing, 3=colors, 4=off, 5=auto
-theme = 2
-# Intensity (1-5)
-intensity = 3
-# Speed (1-5)
-speed = 3
+led = "/dev/ttyUSB0"
+# Note: LED theme, intensity, and speed are stored in the state directory.
+# Use `ht32panelctl led set <theme>` to change them.
 
 # Canvas Configuration
 [canvas]

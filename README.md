@@ -53,7 +53,6 @@ tar -xzf ht32-panel-*-x86_64-linux.tar.gz
 
   services.ht32-panel = {
     enable = true;
-    led.theme = 2;  # breathing
   };
 }
 ```
@@ -79,7 +78,6 @@ In your Home Manager configuration:
 
   services.ht32-panel = {
     enable = true;
-    led.theme = 2;  # breathing
     applet.enable = true;  # optional system tray applet
   };
 }

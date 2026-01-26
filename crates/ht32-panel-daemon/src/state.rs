@@ -42,6 +42,22 @@ pub struct DisplaySettings {
     /// Optional background image path.
     #[serde(default)]
     pub background_image: Option<String>,
+
+    /// LED theme (1=rainbow, 2=breathing, 3=colors, 4=off, 5=auto).
+    #[serde(default = "default_led_theme")]
+    pub led_theme: u8,
+
+    /// LED intensity (1-5).
+    #[serde(default = "default_led_value")]
+    pub led_intensity: u8,
+
+    /// LED speed (1-5).
+    #[serde(default = "default_led_value")]
+    pub led_speed: u8,
+
+    /// Refresh rate in seconds (2-60).
+    #[serde(default = "default_refresh_rate")]
+    pub refresh_rate_secs: u32,
 }
 
 fn default_face() -> String {
@@ -54,6 +70,18 @@ fn default_bg_color() -> String {
 
 fn default_fg_color() -> String {
     "#FFFFFF".to_string()
+}
+
+fn default_led_theme() -> u8 {
+    2 // Breathing
+}
+
+fn default_led_value() -> u8 {
+    3
+}
+
+fn default_refresh_rate() -> u32 {
+    2
 }
 
 /// Parse a hex color string (e.g., "#FFFFFF" or "FFFFFF") to RGB888.
@@ -73,6 +101,10 @@ impl Default for DisplaySettings {
             background_color: default_bg_color(),
             foreground_color: default_fg_color(),
             background_image: None,
+            led_theme: default_led_theme(),
+            led_intensity: default_led_value(),
+            led_speed: default_led_value(),
+            refresh_rate_secs: default_refresh_rate(),
         }
     }
 }
@@ -255,10 +287,10 @@ impl AppState {
         info!("Foreground color: #{:06X}", fg_color);
 
         Ok(Self {
-            led_device_path: config.led.device.clone(),
-            led_theme: RwLock::new(config.led.theme),
-            led_intensity: RwLock::new(config.led.intensity),
-            led_speed: RwLock::new(config.led.speed),
+            led_device_path: config.devices.led.clone(),
+            led_theme: RwLock::new(settings.led_theme),
+            led_intensity: RwLock::new(settings.led_intensity),
+            led_speed: RwLock::new(settings.led_speed),
             state_dir,
             config: RwLock::new(config),
             lcd,
@@ -272,7 +304,7 @@ impl AppState {
             background_color: RwLock::new(bg_color),
             foreground_color: RwLock::new(fg_color),
             background_image: RwLock::new(bg_image),
-            refresh_rate_secs: RwLock::new(2),
+            refresh_rate_secs: RwLock::new(settings.refresh_rate_secs),
         })
     }
 
@@ -300,6 +332,10 @@ impl AppState {
                 .unwrap()
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string()),
+            led_theme: *self.led_theme.read().unwrap(),
+            led_intensity: *self.led_intensity.read().unwrap(),
+            led_speed: *self.led_speed.read().unwrap(),
+            refresh_rate_secs: *self.refresh_rate_secs.read().unwrap(),
         };
 
         let settings_file = self.state_dir.join("display.toml");
@@ -378,6 +414,7 @@ impl AppState {
     pub fn set_refresh_rate_secs(&self, secs: u32) {
         let clamped = secs.clamp(2, 60);
         *self.refresh_rate_secs.write().unwrap() = clamped;
+        self.save_display_settings();
         info!("Refresh rate set to {}s", clamped);
     }
 
@@ -400,6 +437,7 @@ impl AppState {
         *self.led_intensity.write().unwrap() = intensity;
         *self.led_speed.write().unwrap() = speed;
 
+        self.save_display_settings();
         info!(
             "LED set to theme {} (intensity: {}, speed: {})",
             theme, intensity, speed
@@ -412,6 +450,7 @@ impl AppState {
         let led = LedDevice::new(&self.led_device_path);
         led.set_off().await?;
         *self.led_theme.write().unwrap() = 4; // Off
+        self.save_display_settings();
         info!("LED turned off");
         Ok(())
     }
@@ -690,6 +729,10 @@ impl AppState {
                 .unwrap()
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string()),
+            led_theme: *self.led_theme.read().unwrap(),
+            led_intensity: *self.led_intensity.read().unwrap(),
+            led_speed: *self.led_speed.read().unwrap(),
+            refresh_rate_secs: *self.refresh_rate_secs.read().unwrap(),
         }
     }
 }

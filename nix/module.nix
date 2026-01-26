@@ -16,14 +16,9 @@ let
     poll = cfg.poll;
     refresh = cfg.refresh;
     heartbeat = cfg.heartbeat;
-    lcd = {
-      device = cfg.lcd.device;
-    };
-    led = {
-      device = cfg.led.device;
-      theme = cfg.led.theme;
-      intensity = cfg.led.intensity;
-      speed = cfg.led.speed;
+    devices = {
+      lcd = cfg.devices.lcd;
+      led = cfg.devices.led;
     };
     canvas = {
       width = cfg.canvas.width;
@@ -122,37 +117,21 @@ in
       description = "Heartbeat interval in milliseconds.";
     };
 
-    lcd = {
-      device = lib.mkOption {
+    devices = {
+      lcd = lib.mkOption {
         type = lib.types.str;
         default = "auto";
         description = "LCD device path or 'auto' for auto-detection.";
       };
-    };
 
-    led = {
-      device = lib.mkOption {
+      led = lib.mkOption {
         type = lib.types.str;
         default = "/dev/ttyUSB0";
-        description = "Serial port path for LED controller.";
-      };
-
-      theme = lib.mkOption {
-        type = lib.types.ints.between 1 5;
-        default = 2;
-        description = "LED theme (1=rainbow, 2=breathing, 3=colors, 4=off, 5=auto).";
-      };
-
-      intensity = lib.mkOption {
-        type = lib.types.ints.between 1 5;
-        default = 3;
-        description = "LED intensity (1-5).";
-      };
-
-      speed = lib.mkOption {
-        type = lib.types.ints.between 1 5;
-        default = 3;
-        description = "LED animation speed (1-5).";
+        description = ''
+          Serial port path for LED controller.
+          Note: LED theme, intensity, and speed are stored in the state directory.
+          Use `ht32panelctl led set <theme>` to change them.
+        '';
       };
     };
 

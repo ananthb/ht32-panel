@@ -37,13 +37,9 @@ pub struct Config {
     #[serde(default = "default_heartbeat")]
     pub heartbeat: u64,
 
-    /// LCD configuration
+    /// Device configuration
     #[serde(default)]
-    pub lcd: LcdConfig,
-
-    /// LED configuration
-    #[serde(default)]
-    pub led: LedConfig,
+    pub devices: DevicesConfig,
 
     /// Canvas configuration
     #[serde(default)]
@@ -104,41 +100,23 @@ impl Default for DbusConfig {
     }
 }
 
-/// LCD device configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct LcdConfig {
-    /// Device path or "auto" for auto-detection
-    #[serde(default = "default_lcd_device")]
-    pub device: String,
-}
-
-/// LED device configuration.
+/// Device configuration for LCD and LED hardware.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LedConfig {
-    /// Serial port path
+pub struct DevicesConfig {
+    /// LCD device path or "auto" for auto-detection
+    #[serde(default = "default_lcd_device")]
+    pub lcd: String,
+
+    /// LED serial port path
     #[serde(default = "default_led_device")]
-    pub device: String,
-
-    /// Current theme (1-5)
-    #[serde(default = "default_led_theme")]
-    pub theme: u8,
-
-    /// Intensity (1-5)
-    #[serde(default = "default_led_value")]
-    pub intensity: u8,
-
-    /// Speed (1-5)
-    #[serde(default = "default_led_value")]
-    pub speed: u8,
+    pub led: String,
 }
 
-impl Default for LedConfig {
+impl Default for DevicesConfig {
     fn default() -> Self {
         Self {
-            device: default_led_device(),
-            theme: default_led_theme(),
-            intensity: default_led_value(),
-            speed: default_led_value(),
+            lcd: default_lcd_device(),
+            led: default_led_device(),
         }
     }
 }
@@ -215,14 +193,6 @@ fn default_led_device() -> String {
     "/dev/ttyUSB0".to_string()
 }
 
-fn default_led_theme() -> u8 {
-    2 // Breathing
-}
-
-fn default_led_value() -> u8 {
-    3
-}
-
 fn default_width() -> u32 {
     320
 }
@@ -258,8 +228,7 @@ impl Default for Config {
             poll: default_poll(),
             refresh: default_refresh(),
             heartbeat: default_heartbeat(),
-            lcd: LcdConfig::default(),
-            led: LedConfig::default(),
+            devices: DevicesConfig::default(),
             canvas: CanvasConfig::default(),
             display: DisplayConfig::default(),
         }
