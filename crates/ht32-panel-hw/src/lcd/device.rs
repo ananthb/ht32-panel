@@ -19,9 +19,9 @@ pub struct LcdDevice {
 }
 
 /// The HID interface number used for LCD data transfer.
-/// The device has multiple interfaces; interface 0 appears to be for display control.
-/// Reference implementation uses interface 1.1 (config 1, interface 1).
-const LCD_INTERFACE: i32 = 0;
+/// The device has multiple interfaces; interface 2 is for display data.
+/// (Some devices may use interface 0 or 1 depending on firmware)
+const LCD_INTERFACE: i32 = 2;
 
 impl LcdDevice {
     /// Opens the LCD device by VID:PID.
