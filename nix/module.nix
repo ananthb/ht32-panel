@@ -301,14 +301,18 @@ in
           SystemCallArchitectures = "native";
           SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
           CapabilityBoundingSet = "";
-          DevicePolicy = "closed";
 
-          # Allow access to USB devices
+          # Device access for LCD (hidraw) and LED (serial)
+          DevicePolicy = "closed";
           DeviceAllow = [
             "/dev/hidraw* rw"
             "/dev/ttyUSB* rw"
             "/dev/ttyACM* rw"
+            "char-usb_device rw"
           ];
+
+          # Supplementary groups for device access
+          SupplementaryGroups = [ "dialout" ];
         };
       };
 
