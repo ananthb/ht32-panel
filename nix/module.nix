@@ -53,8 +53,8 @@ in
 
       group = lib.mkOption {
         type = lib.types.str;
-        default = if cfg.enable then cfg.group else "plugdev";
-        defaultText = lib.literalExpression ''if cfg.enable then cfg.group else "plugdev"'';
+        default = if cfg.enable then cfg.group else "users";
+        defaultText = lib.literalExpression ''if cfg.enable then cfg.group else "users"'';
         description = "Group to grant access to hardware devices.";
       };
     };
@@ -224,7 +224,7 @@ in
         isSystemUser = true;
         group = cfg.group;
         description = "HT32 Panel daemon user";
-        extraGroups = [ "dialout" "plugdev" ];
+        extraGroups = [ "dialout" ];
       };
 
       users.groups.${cfg.group} = lib.mkIf (cfg.group == "ht32-panel") { };
@@ -308,7 +308,7 @@ in
           ];
 
           # Supplementary groups for device access
-          SupplementaryGroups = [ "dialout" "plugdev" ];
+          SupplementaryGroups = [ "dialout" ];
 
           # Allow read access to sysfs for device enumeration (hidapi needs this)
           # ProtectSystem=strict makes paths read-only, but we need bind mounts for /sys
