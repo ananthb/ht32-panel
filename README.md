@@ -2,6 +2,8 @@
 
 [![Release](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml/badge.svg)](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml)
 
+![ht32-panel](https://raw.githubusercontent.com/ananthb/ht32-panel/main/ht32-panel.png)
+
 Front-panel display and LED control for mini PCs with HT32-based LCD and RGB LEDs ([Skullsaints Agni](https://www.electroniksindia.com/products/agni-by-skullsaints-mini-pc-intel-twin-lake-n150-vibrant-lcd-screen-m-2-ssd-mini-tower-with-rgb-lights-wifi-6-4k-uhd-dual-lan-for-home-and-office), [AceMagic S1](https://acemagic.com/products/acemagic-s1-12th-alder-laker-n95-mini-pc), etc.).
 
 ## Features
@@ -9,6 +11,7 @@ Front-panel display and LED control for mini PCs with HT32-based LCD and RGB LED
 - **Daemon** (`ht32paneld`): D-Bus service with HTMX web UI
 - **CLI** (`ht32panelctl`): D-Bus client for daemon control
 - **Applet**: System tray for GNOME/KDE
+- **Web UI**: Monitor and control the panel from a browser
 
 ## Hardware
 
@@ -120,6 +123,12 @@ ht32paneld config/default.toml
 ht32panelctl lcd orientation landscape
 ht32panelctl led set rainbow --intensity 3 --speed 3
 ```
+
+## Web UI
+
+The daemon includes a web UI for monitoring and controlling the panel.
+
+![ht32-panel-web-ui](https://raw.githubusercontent.com/ananthb/ht32-panel/main/ht32-panel-web-ui.png)
 
 To enable the web UI, set `web.enable = true` in the config file.
 
