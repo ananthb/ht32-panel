@@ -3,6 +3,30 @@
 let
   cfg = config.services.ht32-panel;
   settingsFormat = pkgs.formats.toml { };
+
+  configFile = settingsFormat.generate "config.toml" ({
+    web = {
+      enable = cfg.web.enable;
+      listen = cfg.web.listen;
+    };
+    theme = cfg.theme;
+    poll = cfg.poll;
+    refresh = cfg.refresh;
+    heartbeat = cfg.heartbeat;
+    lcd = {
+      device = cfg.lcd.device;
+    };
+    led = {
+      device = cfg.led.device;
+      theme = cfg.led.theme;
+      intensity = cfg.led.intensity;
+      speed = cfg.led.speed;
+    };
+    canvas = {
+      width = cfg.canvas.width;
+      height = cfg.canvas.height;
+    };
+  } // cfg.extraSettings);
 in
 {
   options.services.ht32-panel = {
@@ -111,12 +135,6 @@ in
       };
     };
 
-    configDir = lib.mkOption {
-      type = lib.types.path;
-      default = "/var/lib/ht32-panel";
-      description = "Directory for configuration and theme files.";
-    };
-
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -164,11 +182,11 @@ in
     # Udev rules for USB HID access
     services.udev.extraRules = ''
       # HT32 Panel LCD (VID:PID 04D9:FD01)
-      SUBSYSTEM=="usb", ATTR{idVendor}=="04d9", ATTR{idProduct}=="fd01", MODE="0666", GROUP="${cfg.group}"
-      SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04d9", ATTRS{idProduct}=="fd01", MODE="0666", GROUP="${cfg.group}"
+      SUBSYSTEM=="usb", ATTR{idVendor}=="04d9", ATTR{idProduct}=="fd01", MODE="0660", GROUP="${cfg.group}"
+      SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04d9", ATTRS{idProduct}=="fd01", MODE="0660", GROUP="${cfg.group}"
 
       # CH340 serial adapter for LED strip
-      SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE="0666", GROUP="${cfg.group}", SYMLINK+="ht32-led"
+      SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE="0660", GROUP="${cfg.group}", SYMLINK+="ht32-led"
     '';
 
     # D-Bus service file for on-demand activation
@@ -179,14 +197,14 @@ in
         text = ''
           [D-BUS Service]
           Name=org.ht32panel.Daemon
-          Exec=${cfg.package}/bin/ht32paneld ${cfg.configDir}/config.toml
+          Exec=${cfg.package}/bin/ht32paneld ${configFile}
           User=${cfg.user}
         '';
       })
     ];
 
     # Systemd service
-    systemd.services.ht32-panel = {
+    systemd.services.ht32paneld = {
       description = "HT32 Panel Daemon";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" "dbus.service" ];
@@ -200,16 +218,37 @@ in
         Type = "simple";
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${cfg.package}/bin/ht32paneld ${cfg.configDir}/config.toml";
+        ExecStart = "${cfg.package}/bin/ht32paneld ${configFile}";
         Restart = "on-failure";
         RestartSec = 5;
+
+        # Directories managed by systemd
+        StateDirectory = "ht32-panel";
+        ConfigurationDirectory = "ht32-panel";
 
         # Hardening
         NoNewPrivileges = true;
         ProtectSystem = "strict";
         ProtectHome = true;
         PrivateTmp = true;
-        ReadWritePaths = [ cfg.configDir ];
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectKernelLogs = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        SystemCallArchitectures = "native";
+        SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
+        CapabilityBoundingSet = "";
+        DevicePolicy = "closed";
 
         # Allow access to USB devices
         DeviceAllow = [
@@ -218,41 +257,6 @@ in
           "/dev/ttyACM* rw"
         ];
       };
-
-      preStart = ''
-        # Ensure config directory exists
-        mkdir -p ${cfg.configDir}/themes
-
-        # Generate config file
-        cat > ${cfg.configDir}/config.toml << EOF
-        [web]
-        enable = ${lib.boolToString cfg.web.enable}
-        listen = "${cfg.web.listen}"
-
-        theme = "${cfg.theme}"
-        poll = ${toString cfg.poll}
-        refresh = ${toString cfg.refresh}
-        heartbeat = ${toString cfg.heartbeat}
-
-        [lcd]
-        device = "${cfg.lcd.device}"
-
-        [led]
-        device = "${cfg.led.device}"
-        theme = ${toString cfg.led.theme}
-        intensity = ${toString cfg.led.intensity}
-        speed = ${toString cfg.led.speed}
-
-        [canvas]
-        width = ${toString cfg.canvas.width}
-        height = ${toString cfg.canvas.height}
-        EOF
-
-        # Copy default theme if not present
-        if [ ! -f ${cfg.configDir}/themes/default.toml ]; then
-          cp ${cfg.package}/share/ht32-panel/themes/default.toml ${cfg.configDir}/themes/
-        fi
-      '';
     };
 
     # Open firewall if requested (only if web server is enabled)

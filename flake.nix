@@ -20,7 +20,11 @@
   };
 
   outputs = { self, nixpkgs, flake-utils, rust-overlay, devenv }@inputs:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
+    let
+      cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+      version = cargoToml.workspace.package.version;
+    in
+    flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
 
@@ -38,7 +42,7 @@
 
         cargoArgs = {
           pname = "ht32-panel";
-          version = "0.1.0";
+          inherit version;
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
           inherit nativeBuildInputs buildInputs;
@@ -47,8 +51,8 @@
           meta = with pkgs.lib; {
             description = "HT32 Panel - Mini PC Display & LED Control";
             homepage = "https://github.com/ananthb/ht32-panel";
-            license = licenses.gpl3;
-            platforms = platforms.linux;
+            license = licenses.agpl3Plus;
+            platforms = [ "x86_64-linux" ];
           };
         };
 
