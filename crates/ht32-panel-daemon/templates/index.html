@@ -9,9 +9,12 @@
 
 <div class="card preview">
     <h2>Display Preview</h2>
-    <img id="lcd-preview" src="/lcd.png" alt="LCD Preview"
-         hx-get="/lcd.png" hx-trigger="every 2s" hx-swap="outerHTML"
-         hx-on::after-request="this.src='/lcd.png?t=' + Date.now()">
+    <img id="lcd-preview" src="/lcd.png" alt="LCD Preview">
+    <script>
+        setInterval(function() {
+            document.getElementById('lcd-preview').src = '/lcd.png?t=' + Date.now();
+        }, 2000);
+    </script>
 </div>
 
 <div class="card">
