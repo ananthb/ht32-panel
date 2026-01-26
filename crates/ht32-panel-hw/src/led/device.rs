@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
-use tokio_serial::SerialPortBuilderExt;
+use tokio_serial::{DataBits, Parity, SerialPortBuilderExt, StopBits};
 use tracing::{debug, info};
 
 /// LED signature byte.
@@ -91,6 +91,9 @@ impl LedDevice {
     /// Opens the serial port and sends data.
     async fn send_packet(&self, packet: [u8; 5]) -> Result<()> {
         let mut port = tokio_serial::new(&self.port_path, BAUD_RATE)
+            .data_bits(DataBits::Eight)
+            .parity(Parity::None)
+            .stop_bits(StopBits::One)
             .open_native_async()
             .map_err(|e| {
                 // Check if the error is due to device not existing
@@ -112,13 +115,9 @@ impl LedDevice {
             self.port_path, packet
         );
 
-        // Write byte-by-byte with delay as per protocol
-        for (i, byte) in packet.iter().enumerate() {
-            port.write_all(&[*byte]).await?;
-            port.flush().await?; // Ensure byte is sent before delay
-            debug!("LED byte {}: {:02X}", i, byte);
-            sleep(Duration::from_millis(BYTE_DELAY_MS)).await;
-        }
+        // Write all bytes at once, then flush
+        port.write_all(&packet).await?;
+        port.flush().await?;
 
         debug!("LED packet sent successfully");
         Ok(())
