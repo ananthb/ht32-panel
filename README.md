@@ -2,7 +2,7 @@
 
 [![Release](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml/badge.svg)](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml)
 
-Front-panel display and LED control for mini PCs with HT32-based LCD and RGB LEDs (AceMagic S1S, Skullsaints Agni, etc.).
+Front-panel display and LED control for mini PCs with HT32-based LCD and RGB LEDs ([Skullsaints Agni](https://www.electroniksindia.com/products/agni-by-skullsaints-mini-pc-intel-twin-lake-n150-vibrant-lcd-screen-m-2-ssd-mini-tower-with-rgb-lights-wifi-6-4k-uhd-dual-lan-for-home-and-office), [AceMagic S1](https://acemagic.com/products/acemagic-s1-12th-alder-laker-n95-mini-pc), etc.).
 
 ## Features
 
