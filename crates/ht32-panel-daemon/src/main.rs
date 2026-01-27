@@ -129,9 +129,28 @@ async fn main() -> Result<()> {
 }
 
 async fn render_loop(state: Arc<AppState>) {
+    let mut consecutive_errors: u32 = 0;
+    let mut last_error_log = std::time::Instant::now();
+
     loop {
         if let Err(e) = state.render_frame().await {
-            warn!("Render error: {}", e);
+            consecutive_errors += 1;
+            // Only log errors once per minute or on first error
+            let elapsed = last_error_log.elapsed();
+            if consecutive_errors == 1 || elapsed >= std::time::Duration::from_secs(60) {
+                if consecutive_errors > 1 {
+                    warn!(
+                        "Render error (repeated {} times in {:?}): {}",
+                        consecutive_errors, elapsed, e
+                    );
+                } else {
+                    warn!("Render error: {}", e);
+                }
+                last_error_log = std::time::Instant::now();
+                consecutive_errors = 0;
+            }
+        } else {
+            consecutive_errors = 0;
         }
         let ms = state.refresh_interval_ms();
         tokio::time::sleep(std::time::Duration::from_millis(ms as u64)).await;
@@ -140,11 +159,28 @@ async fn render_loop(state: Arc<AppState>) {
 
 async fn heartbeat_loop(state: Arc<AppState>, interval_ms: u64) {
     let interval = std::time::Duration::from_millis(interval_ms);
+    let mut consecutive_errors: u32 = 0;
+    let mut last_error_log = std::time::Instant::now();
 
     loop {
         tokio::time::sleep(interval).await;
         if let Err(e) = state.send_heartbeat() {
-            warn!("Heartbeat error: {}", e);
+            consecutive_errors += 1;
+            let elapsed = last_error_log.elapsed();
+            if consecutive_errors == 1 || elapsed >= std::time::Duration::from_secs(60) {
+                if consecutive_errors > 1 {
+                    warn!(
+                        "Heartbeat error (repeated {} times in {:?}): {}",
+                        consecutive_errors, elapsed, e
+                    );
+                } else {
+                    warn!("Heartbeat error: {}", e);
+                }
+                last_error_log = std::time::Instant::now();
+                consecutive_errors = 0;
+            }
+        } else {
+            consecutive_errors = 0;
         }
     }
 }
