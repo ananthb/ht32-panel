@@ -1,6 +1,8 @@
-{ pkgs, lib, config, inputs, ... }:
+{ pkgs, config, ... }:
 
 {
+  devenv.flakesIntegration = true;
+
   # Environment variables
   env.RUST_BACKTRACE = "1";
   env.RUST_LOG = "info";
