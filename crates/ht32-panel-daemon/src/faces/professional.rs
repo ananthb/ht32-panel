@@ -188,7 +188,7 @@ impl Face for ProfessionalFace {
 
             // Disk I/O bar
             let disk_total = data.disk_read_rate + data.disk_write_rate;
-            let disk_percent = (disk_total / 100_000_000.0 * 100.0).min(100.0); // Scale: 100MB/s = 100%
+            let disk_percent = (disk_total / 10_000_000.0 * 100.0).min(100.0); // Scale: 10MB/s = 100%
             canvas.draw_text(margin, y, "DSK", FONT_SMALL, colors.text);
             Self::draw_progress_bar(
                 canvas,
@@ -214,7 +214,7 @@ impl Face for ProfessionalFace {
 
             // Network I/O bar
             let net_total = data.net_rx_rate + data.net_tx_rate;
-            let net_percent = (net_total / 100_000_000.0 * 100.0).min(100.0); // Scale: 100MB/s = 100%
+            let net_percent = (net_total / 10_000_000.0 * 100.0).min(100.0); // Scale: 10MB/s = 100%
             canvas.draw_text(margin, y, "NET", FONT_SMALL, colors.text);
             Self::draw_progress_bar(
                 canvas,
@@ -314,7 +314,7 @@ impl Face for ProfessionalFace {
 
             // Disk I/O bar
             let disk_total = data.disk_read_rate + data.disk_write_rate;
-            let disk_percent = (disk_total / 100_000_000.0 * 100.0).min(100.0);
+            let disk_percent = (disk_total / 10_000_000.0 * 100.0).min(100.0);
             let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
             let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
             canvas.draw_text(margin, y, "DSK", FONT_SMALL, colors.text);
@@ -339,7 +339,7 @@ impl Face for ProfessionalFace {
 
             // Network I/O bar
             let net_total = data.net_rx_rate + data.net_tx_rate;
-            let net_percent = (net_total / 100_000_000.0 * 100.0).min(100.0);
+            let net_percent = (net_total / 10_000_000.0 * 100.0).min(100.0);
             let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
             let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
             canvas.draw_text(margin, y, "NET", FONT_SMALL, colors.text);
