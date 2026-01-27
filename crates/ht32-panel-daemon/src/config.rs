@@ -17,10 +17,6 @@ pub struct Config {
     #[serde(default)]
     pub dbus: DbusConfig,
 
-    /// Path to theme configuration
-    #[serde(default = "default_theme")]
-    pub theme: String,
-
     /// State directory for persisting runtime state
     #[serde(default = "default_state_dir")]
     pub state_dir: String,
@@ -143,10 +139,6 @@ fn default_listen() -> String {
     "[::1]:8686".to_string()
 }
 
-fn default_theme() -> String {
-    "themes/default.toml".to_string()
-}
-
 fn default_state_dir() -> String {
     // Check STATE_DIRECTORY first (set by systemd when StateDirectory= is configured)
     // Then fall back to XDG state directory or /var/lib
@@ -211,7 +203,6 @@ impl Default for Config {
         Self {
             web: WebConfig::default(),
             dbus: DbusConfig::default(),
-            theme: default_theme(),
             state_dir: default_state_dir(),
             poll: default_poll(),
             refresh: default_refresh(),

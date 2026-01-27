@@ -28,6 +28,30 @@ trait Daemon1 {
     /// Gets the current face name.
     fn get_face(&self) -> zbus::Result<String>;
 
+    /// Gets the background color as hex string.
+    fn get_background_color(&self) -> zbus::Result<String>;
+
+    /// Sets the background color from hex string.
+    fn set_background_color(&self, color: &str) -> zbus::Result<()>;
+
+    /// Gets the foreground color as hex string.
+    fn get_foreground_color(&self) -> zbus::Result<String>;
+
+    /// Sets the foreground color from hex string.
+    fn set_foreground_color(&self, color: &str) -> zbus::Result<()>;
+
+    /// Gets the background image path.
+    fn get_background_image(&self) -> zbus::Result<String>;
+
+    /// Sets the background image path.
+    fn set_background_image(&self, path: &str) -> zbus::Result<()>;
+
+    /// Clears the background image.
+    fn clear_background_image(&self) -> zbus::Result<()>;
+
+    /// Returns the current framebuffer as PNG data.
+    fn get_screen_png(&self) -> zbus::Result<Vec<u8>>;
+
     /// Sets LED parameters.
     fn set_led(&self, theme: u8, intensity: u8, speed: u8) -> zbus::Result<()>;
 
@@ -69,6 +93,19 @@ trait Daemon1 {
     /// Current refresh rate in seconds.
     #[zbus(property)]
     fn refresh_rate(&self) -> zbus::Result<u32>;
+
+    /// Gets the current network interface.
+    fn get_network_interface(&self) -> zbus::Result<String>;
+
+    /// Sets the network interface to monitor.
+    fn set_network_interface(&self, interface: &str) -> zbus::Result<()>;
+
+    /// Lists all available network interfaces.
+    fn list_network_interfaces(&self) -> zbus::Result<Vec<String>>;
+
+    /// Current network interface name.
+    #[zbus(property)]
+    fn network_interface(&self) -> zbus::Result<String>;
 }
 
 /// D-Bus client wrapper for the daemon.
@@ -206,5 +243,93 @@ impl DaemonClient {
             .set_refresh_rate(secs)
             .await
             .context("Failed to set refresh rate via D-Bus")
+    }
+
+    /// Gets the background color as hex string.
+    pub async fn get_background_color(&self) -> Result<String> {
+        self.proxy
+            .get_background_color()
+            .await
+            .context("Failed to get background color via D-Bus")
+    }
+
+    /// Sets the background color from hex string.
+    pub async fn set_background_color(&self, color: &str) -> Result<()> {
+        self.proxy
+            .set_background_color(color)
+            .await
+            .context("Failed to set background color via D-Bus")
+    }
+
+    /// Gets the foreground color as hex string.
+    pub async fn get_foreground_color(&self) -> Result<String> {
+        self.proxy
+            .get_foreground_color()
+            .await
+            .context("Failed to get foreground color via D-Bus")
+    }
+
+    /// Sets the foreground color from hex string.
+    pub async fn set_foreground_color(&self, color: &str) -> Result<()> {
+        self.proxy
+            .set_foreground_color(color)
+            .await
+            .context("Failed to set foreground color via D-Bus")
+    }
+
+    /// Gets the background image path.
+    pub async fn get_background_image(&self) -> Result<String> {
+        self.proxy
+            .get_background_image()
+            .await
+            .context("Failed to get background image via D-Bus")
+    }
+
+    /// Sets the background image path.
+    pub async fn set_background_image(&self, path: &str) -> Result<()> {
+        self.proxy
+            .set_background_image(path)
+            .await
+            .context("Failed to set background image via D-Bus")
+    }
+
+    /// Clears the background image.
+    pub async fn clear_background_image(&self) -> Result<()> {
+        self.proxy
+            .clear_background_image()
+            .await
+            .context("Failed to clear background image via D-Bus")
+    }
+
+    /// Gets the screen as PNG data.
+    pub async fn get_screen_png(&self) -> Result<Vec<u8>> {
+        self.proxy
+            .get_screen_png()
+            .await
+            .context("Failed to get screen PNG via D-Bus")
+    }
+
+    /// Gets the current network interface.
+    pub async fn get_network_interface(&self) -> Result<String> {
+        self.proxy
+            .get_network_interface()
+            .await
+            .context("Failed to get network interface via D-Bus")
+    }
+
+    /// Sets the network interface to monitor.
+    pub async fn set_network_interface(&self, interface: &str) -> Result<()> {
+        self.proxy
+            .set_network_interface(interface)
+            .await
+            .context("Failed to set network interface via D-Bus")
+    }
+
+    /// Lists all available network interfaces.
+    pub async fn list_network_interfaces(&self) -> Result<Vec<String>> {
+        self.proxy
+            .list_network_interfaces()
+            .await
+            .context("Failed to list network interfaces via D-Bus")
     }
 }

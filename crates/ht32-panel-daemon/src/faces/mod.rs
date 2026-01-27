@@ -1,7 +1,6 @@
-//! Face system for pre-configured widget layouts.
+//! Face system for pre-configured layouts.
 //!
-//! Faces are like watch faces - pre-configured layouts of widgets
-//! that display system information in different styles.
+//! Faces display system information in different styles and colours.
 
 #![allow(dead_code)]
 

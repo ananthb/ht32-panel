@@ -1,4 +1,4 @@
-//! System data aggregation for faces and widgets.
+//! System data aggregation for faces.
 
 /// Aggregated system data from all sensors.
 #[derive(Debug, Clone, Default)]

@@ -11,7 +11,6 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::rendering::WidgetRect;
 use crate::state::AppState;
 use ht32_panel_hw::Orientation;
 
@@ -81,23 +80,6 @@ struct PreviewTemplate {
     timestamp: u128,
 }
 
-/// Widget info for template.
-struct WidgetInfo {
-    id: u32,
-    name: String,
-    x: i32,
-    y: i32,
-    width: u32,
-    height: u32,
-}
-
-/// Widgets partial template.
-#[derive(Template)]
-#[template(path = "partials/widgets.html")]
-struct WidgetsTemplate {
-    widgets: Vec<WidgetInfo>,
-}
-
 /// Creates the web router with all routes.
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -119,9 +101,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         )
         .route("/preview", get(preview_get))
         .route("/refresh-rate", post(refresh_rate_set))
-        .route("/widgets", get(widgets_get))
-        .route("/widgets/add", post(widget_add))
-        .route("/widgets/delete", post(widget_delete))
         // State
         .with_state(state)
 }
@@ -406,95 +385,4 @@ async fn refresh_rate_set(
 ) -> impl IntoResponse {
     state.set_refresh_rate_secs(form.rate);
     StatusCode::OK
-}
-
-/// GET /widgets - Widgets list partial
-async fn widgets_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let widgets = state.read_canvas(|canvas| {
-        canvas
-            .widgets()
-            .iter()
-            .map(|w| WidgetInfo {
-                id: w.id,
-                name: w.widget_type.clone(),
-                x: w.rect.x,
-                y: w.rect.y,
-                width: w.rect.width,
-                height: w.rect.height,
-            })
-            .collect()
-    });
-    Html(WidgetsTemplate { widgets }.render().unwrap())
-}
-
-/// Form data for adding widget.
-#[derive(Deserialize)]
-struct AddWidgetForm {
-    name: String,
-}
-
-/// POST /widgets/add - Add a widget
-async fn widget_add(
-    State(state): State<Arc<AppState>>,
-    Form(form): Form<AddWidgetForm>,
-) -> impl IntoResponse {
-    state.with_canvas(|canvas| {
-        canvas.add_widget(
-            &form.name,
-            WidgetRect {
-                x: 10,
-                y: 10,
-                width: 50,
-                height: 50,
-            },
-        );
-    });
-
-    let widgets = state.read_canvas(|canvas| {
-        canvas
-            .widgets()
-            .iter()
-            .map(|w| WidgetInfo {
-                id: w.id,
-                name: w.widget_type.clone(),
-                x: w.rect.x,
-                y: w.rect.y,
-                width: w.rect.width,
-                height: w.rect.height,
-            })
-            .collect()
-    });
-    Html(WidgetsTemplate { widgets }.render().unwrap())
-}
-
-/// Form data for deleting widget.
-#[derive(Deserialize)]
-struct DeleteWidgetForm {
-    id: u32,
-}
-
-/// POST /widgets/delete - Delete a widget
-async fn widget_delete(
-    State(state): State<Arc<AppState>>,
-    Form(form): Form<DeleteWidgetForm>,
-) -> impl IntoResponse {
-    state.with_canvas(|canvas| {
-        canvas.remove_widget(form.id);
-    });
-
-    let widgets = state.read_canvas(|canvas| {
-        canvas
-            .widgets()
-            .iter()
-            .map(|w| WidgetInfo {
-                id: w.id,
-                name: w.widget_type.clone(),
-                x: w.rect.x,
-                y: w.rect.y,
-                width: w.rect.width,
-                height: w.rect.height,
-            })
-            .collect()
-    });
-    Html(WidgetsTemplate { widgets }.render().unwrap())
 }

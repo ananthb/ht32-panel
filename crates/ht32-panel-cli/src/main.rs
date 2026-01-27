@@ -50,6 +50,27 @@ enum Commands {
         #[command(subcommand)]
         action: LedCommands,
     },
+    /// Color settings
+    Colors {
+        #[command(subcommand)]
+        action: ColorsCommands,
+    },
+    /// Background image settings
+    Background {
+        #[command(subcommand)]
+        action: BackgroundCommands,
+    },
+    /// Network interface settings
+    Network {
+        #[command(subcommand)]
+        action: NetworkCommands,
+    },
+    /// Save a screenshot of the display
+    Screenshot {
+        /// Output file path (default: screenshot.png)
+        #[arg(default_value = "screenshot.png")]
+        output: String,
+    },
     /// Daemon control commands
     Daemon {
         #[command(subcommand)]
@@ -113,6 +134,48 @@ enum DaemonCommands {
     Quit,
 }
 
+#[derive(Subcommand)]
+enum ColorsCommands {
+    /// Show current colors
+    Show,
+    /// Set background color
+    Background {
+        /// Color in hex format (e.g., #000000)
+        color: String,
+    },
+    /// Set foreground/text color
+    Foreground {
+        /// Color in hex format (e.g., #FFFFFF)
+        color: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum BackgroundCommands {
+    /// Show current background image
+    Show,
+    /// Set background image
+    Set {
+        /// Path to image file
+        path: String,
+    },
+    /// Clear background image
+    Clear,
+}
+
+#[derive(Subcommand)]
+enum NetworkCommands {
+    /// Show current network interface
+    Show,
+    /// Set network interface to monitor
+    Set {
+        /// Interface name (e.g., eth0, wlan0) or "auto" for auto-detection
+        interface: String,
+    },
+    /// List available network interfaces
+    List,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -133,6 +196,10 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Lcd { action } => handle_lcd(action, &client).await,
         Commands::Led { action } => handle_led(action, &client).await,
+        Commands::Colors { action } => handle_colors(action, &client).await,
+        Commands::Background { action } => handle_background(action, &client).await,
+        Commands::Network { action } => handle_network(action, &client).await,
+        Commands::Screenshot { output } => handle_screenshot(&output, &client).await,
         Commands::Daemon { action } => handle_daemon(action, &client).await,
     }
 }
@@ -254,5 +321,83 @@ async fn handle_daemon(action: DaemonCommands, client: &DaemonClient) -> Result<
         }
     }
 
+    Ok(())
+}
+
+async fn handle_colors(action: ColorsCommands, client: &DaemonClient) -> Result<()> {
+    match action {
+        ColorsCommands::Show => {
+            let bg = client.get_background_color().await?;
+            let fg = client.get_foreground_color().await?;
+            println!("Colors:");
+            println!("  Background: {}", bg);
+            println!("  Foreground: {}", fg);
+        }
+        ColorsCommands::Background { color } => {
+            client.set_background_color(&color).await?;
+            println!("Background color set to: {}", color);
+        }
+        ColorsCommands::Foreground { color } => {
+            client.set_foreground_color(&color).await?;
+            println!("Foreground color set to: {}", color);
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_background(action: BackgroundCommands, client: &DaemonClient) -> Result<()> {
+    match action {
+        BackgroundCommands::Show => {
+            let path = client.get_background_image().await?;
+            if path.is_empty() {
+                println!("Background image: none");
+            } else {
+                println!("Background image: {}", path);
+            }
+        }
+        BackgroundCommands::Set { path } => {
+            client.set_background_image(&path).await?;
+            println!("Background image set to: {}", path);
+        }
+        BackgroundCommands::Clear => {
+            client.clear_background_image().await?;
+            println!("Background image cleared");
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_network(action: NetworkCommands, client: &DaemonClient) -> Result<()> {
+    match action {
+        NetworkCommands::Show => {
+            let iface = client.get_network_interface().await?;
+            println!("Network interface: {}", iface);
+        }
+        NetworkCommands::Set { interface } => {
+            client.set_network_interface(&interface).await?;
+            if interface.eq_ignore_ascii_case("auto") {
+                println!("Network interface set to auto-detect");
+            } else {
+                println!("Network interface set to: {}", interface);
+            }
+        }
+        NetworkCommands::List => {
+            let interfaces = client.list_network_interfaces().await?;
+            println!("Available network interfaces:");
+            for iface in interfaces {
+                println!("  {}", iface);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_screenshot(output: &str, client: &DaemonClient) -> Result<()> {
+    let png_data = client.get_screen_png().await?;
+    std::fs::write(output, &png_data).context("Failed to write screenshot file")?;
+    println!("Screenshot saved to: {}", output);
     Ok(())
 }

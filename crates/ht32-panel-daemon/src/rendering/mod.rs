@@ -1,8 +1,8 @@
-//! Rendering module for canvas and widgets.
+//! Rendering module for canvas.
 
 #![allow(dead_code)]
 
 mod canvas;
 mod text;
 
-pub use canvas::{Canvas, WidgetRect};
+pub use canvas::Canvas;
