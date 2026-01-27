@@ -22,6 +22,8 @@ pub enum DaemonSignals {
     LedChanged,
     /// Display settings (colors, background image, etc.) changed.
     DisplaySettingsChanged,
+    /// Network interface changed.
+    NetworkInterfaceChanged,
 }
 
 /// D-Bus interface implementation for the HT32 Panel Daemon.
@@ -306,6 +308,46 @@ impl Daemon1Interface {
         self.state.set_refresh_rate_secs(secs);
         debug!("D-Bus: SetRefreshRate({})", secs);
         Ok(())
+    }
+
+    /// Gets the currently active network interface name.
+    fn get_network_interface(&self) -> String {
+        self.state.network_interface_config()
+    }
+
+    /// Sets the network interface to monitor.
+    /// Pass "auto" or empty string to enable auto-detection.
+    fn set_network_interface(&self, interface: &str) -> zbus::fdo::Result<()> {
+        let iface = if interface.is_empty() || interface.eq_ignore_ascii_case("auto") {
+            None
+        } else {
+            // Validate the interface exists
+            let interfaces = self.state.list_network_interfaces();
+            if !interfaces.contains(&interface.to_string()) {
+                return Err(zbus::fdo::Error::InvalidArgs(format!(
+                    "Unknown interface '{}'. Available: {:?}",
+                    interface, interfaces
+                )));
+            }
+            Some(interface.to_string())
+        };
+
+        self.state.set_network_interface(iface);
+        let _ = self.signal_tx.send(DaemonSignals::NetworkInterfaceChanged);
+
+        debug!("D-Bus: SetNetworkInterface({})", interface);
+        Ok(())
+    }
+
+    /// Lists all available network interfaces.
+    fn list_network_interfaces(&self) -> Vec<String> {
+        self.state.list_network_interfaces()
+    }
+
+    /// Current network interface name.
+    #[zbus(property)]
+    fn network_interface(&self) -> String {
+        self.state.network_interface_config()
     }
 }
 

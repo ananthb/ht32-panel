@@ -45,9 +45,51 @@ impl NetworkSensor {
         Self::new(&interface)
     }
 
+    /// Changes the monitored network interface. Resets rate counters.
+    pub fn set_interface(&mut self, interface: &str) {
+        self.name = format!("network_{}", interface);
+        self.interface = interface.to_string();
+        self.last_rx = 0;
+        self.last_tx = 0;
+        self.last_time = None;
+        self.last_rx_rate = 0.0;
+        self.last_tx_rate = 0.0;
+        self.cached_ipv4 = None;
+        self.cached_ipv6 = None;
+        self.last_ip_check = None;
+        info!("Network sensor switched to interface: {}", interface);
+    }
+
+    /// Sets interface to auto-detected default.
+    pub fn set_auto(&mut self) {
+        let interface = Self::detect_interface().unwrap_or_else(|| "eth0".to_string());
+        self.set_interface(&interface);
+    }
+
+    /// Lists all available network interfaces (excludes loopback and virtual interfaces).
+    pub fn list_interfaces() -> Vec<String> {
+        let mut interfaces = Vec::new();
+        if let Ok(entries) = fs::read_dir("/sys/class/net") {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                // Skip loopback and virtual interfaces
+                if name == "lo" || name.starts_with("veth") || name.starts_with("docker") {
+                    continue;
+                }
+                // Check if interface has stats (indicates a real interface)
+                let stats_path = format!("/sys/class/net/{}/statistics/rx_bytes", name);
+                if fs::metadata(&stats_path).is_ok() {
+                    interfaces.push(name);
+                }
+            }
+        }
+        interfaces.sort();
+        interfaces
+    }
+
     /// Detects the primary network interface.
     /// Checks /proc/net/route for the default gateway interface.
-    fn detect_interface() -> Option<String> {
+    pub fn detect_interface() -> Option<String> {
         // Try to find the default route interface from /proc/net/route
         if let Ok(content) = fs::read_to_string("/proc/net/route") {
             for line in content.lines().skip(1) {

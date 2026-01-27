@@ -44,10 +44,6 @@ pub struct Config {
     /// Canvas configuration
     #[serde(default)]
     pub canvas: CanvasConfig,
-
-    /// Display configuration
-    #[serde(default)]
-    pub display: DisplayConfig,
 }
 
 /// Web server configuration.
@@ -142,14 +138,6 @@ impl Default for CanvasConfig {
     }
 }
 
-/// Display configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct DisplayConfig {
-    /// Network interface to monitor (e.g., "eth0", "wlan0")
-    #[serde(default)]
-    pub network_interface: Option<String>,
-}
-
 // Default value functions
 fn default_listen() -> String {
     "[::1]:8686".to_string()
@@ -230,7 +218,6 @@ impl Default for Config {
             heartbeat: default_heartbeat(),
             devices: DevicesConfig::default(),
             canvas: CanvasConfig::default(),
-            display: DisplayConfig::default(),
         }
     }
 }

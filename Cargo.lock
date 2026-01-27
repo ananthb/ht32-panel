@@ -982,7 +982,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-applet"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "ksni",
@@ -995,7 +995,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-cli"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap 4.5.54",
@@ -1007,7 +1007,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-daemon"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -1029,7 +1029,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-hw"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "hidapi",
  "thiserror 1.0.69",

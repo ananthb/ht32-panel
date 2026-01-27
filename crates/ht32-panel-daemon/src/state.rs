@@ -58,6 +58,10 @@ pub struct DisplaySettings {
     /// Refresh rate in seconds (2-60).
     #[serde(default = "default_refresh_rate")]
     pub refresh_rate_secs: u32,
+
+    /// Network interface to monitor (None = auto-detect).
+    #[serde(default)]
+    pub network_interface: Option<String>,
 }
 
 fn default_face() -> String {
@@ -105,6 +109,7 @@ impl Default for DisplaySettings {
             led_intensity: default_led_value(),
             led_speed: default_led_value(),
             refresh_rate_secs: default_refresh_rate(),
+            network_interface: None,
         }
     }
 }
@@ -214,6 +219,9 @@ pub struct AppState {
 
     /// Refresh rate in seconds (2-60)
     refresh_rate_secs: RwLock<u32>,
+
+    /// Network interface to monitor (None = auto-detect)
+    network_interface: RwLock<Option<String>>,
 }
 
 impl AppState {
@@ -256,8 +264,9 @@ impl AppState {
         let mut canvas = Canvas::new(canvas_w as u32, canvas_h as u32);
         let framebuffer = Framebuffer::new();
 
-        // Initialize sensors - use configured network interface or auto-detect
-        let sensors = match config.display.network_interface.as_ref() {
+        // Initialize sensors - use saved settings or auto-detect
+        let network_interface = settings.network_interface.clone();
+        let sensors = match network_interface.as_ref() {
             Some(iface) => Sensors::new(iface),
             None => Sensors::new_auto(),
         };
@@ -305,6 +314,7 @@ impl AppState {
             foreground_color: RwLock::new(fg_color),
             background_image: RwLock::new(bg_image),
             refresh_rate_secs: RwLock::new(settings.refresh_rate_secs),
+            network_interface: RwLock::new(network_interface),
         })
     }
 
@@ -336,6 +346,7 @@ impl AppState {
             led_intensity: *self.led_intensity.read().unwrap(),
             led_speed: *self.led_speed.read().unwrap(),
             refresh_rate_secs: *self.refresh_rate_secs.read().unwrap(),
+            network_interface: self.network_interface.read().unwrap().clone(),
         };
 
         let settings_file = self.state_dir.join("display.toml");
@@ -733,6 +744,38 @@ impl AppState {
             led_intensity: *self.led_intensity.read().unwrap(),
             led_speed: *self.led_speed.read().unwrap(),
             refresh_rate_secs: *self.refresh_rate_secs.read().unwrap(),
+            network_interface: self.network_interface.read().unwrap().clone(),
         }
+    }
+
+    /// Gets the current network interface (None if auto-detected).
+    pub fn network_interface(&self) -> Option<String> {
+        self.network_interface.read().unwrap().clone()
+    }
+
+    /// Gets the currently active network interface name (resolved from auto if needed).
+    pub fn network_interface_config(&self) -> String {
+        let sensors = self.sensors.lock().unwrap();
+        sensors.network.interface_name().to_string()
+    }
+
+    /// Sets the network interface to monitor.
+    /// Pass None to enable auto-detection.
+    pub fn set_network_interface(&self, interface: Option<String>) {
+        *self.network_interface.write().unwrap() = interface.clone();
+
+        // Update the sensor
+        let mut sensors = self.sensors.lock().unwrap();
+        match interface {
+            Some(ref iface) => sensors.network.set_interface(iface),
+            None => sensors.network.set_auto(),
+        }
+
+        self.save_display_settings();
+    }
+
+    /// Lists all available network interfaces.
+    pub fn list_network_interfaces(&self) -> Vec<String> {
+        NetworkSensor::list_interfaces()
     }
 }

@@ -32,11 +32,3 @@ led = "/dev/ttyUSB0"
 [canvas]
 width = 320
 height = 170
-
-# Display Configuration
-[display]
-# Network interface to monitor (optional - defaults to eth0)
-# network_interface = "wlan0"
-
-# Note: Display face is stored in the state directory, not config.
-# Use `ht32panelctl lcd face <name>` to change it.

@@ -65,6 +65,15 @@ struct BackgroundTemplate {
     background_image: String,
 }
 
+/// Network interface partial template.
+#[derive(Template)]
+#[template(path = "partials/network.html")]
+struct NetworkTemplate {
+    current: String,
+    interfaces: Vec<String>,
+    is_auto: bool,
+}
+
 /// Preview partial template.
 #[derive(Template)]
 #[template(path = "partials/preview.html")]
@@ -104,6 +113,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/colors", get(colors_get).post(colors_set))
         .route("/background", get(background_get).post(background_set))
         .route("/background/clear", post(background_clear))
+        .route(
+            "/network-interface",
+            get(network_interface_get).post(network_interface_set),
+        )
         .route("/preview", get(preview_get))
         .route("/refresh-rate", post(refresh_rate_set))
         .route("/widgets", get(widgets_get))
@@ -321,6 +334,54 @@ async fn background_clear(State(state): State<Arc<AppState>>) -> impl IntoRespon
     state.set_background_image(None);
     let background_image = String::new();
     Html(BackgroundTemplate { background_image }.render().unwrap())
+}
+
+/// GET /network-interface - Network interface controls partial
+async fn network_interface_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let current = state.network_interface_config();
+    let interfaces = state.list_network_interfaces();
+    let is_auto = state.network_interface().is_none();
+    Html(
+        NetworkTemplate {
+            current,
+            interfaces,
+            is_auto,
+        }
+        .render()
+        .unwrap(),
+    )
+}
+
+/// Form data for network interface.
+#[derive(Deserialize)]
+struct NetworkInterfaceForm {
+    interface: String,
+}
+
+/// POST /network-interface - Set network interface
+async fn network_interface_set(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<NetworkInterfaceForm>,
+) -> impl IntoResponse {
+    let iface = if form.interface.eq_ignore_ascii_case("auto") || form.interface.is_empty() {
+        None
+    } else {
+        Some(form.interface)
+    };
+    state.set_network_interface(iface);
+
+    let current = state.network_interface_config();
+    let interfaces = state.list_network_interfaces();
+    let is_auto = state.network_interface().is_none();
+    Html(
+        NetworkTemplate {
+            current,
+            interfaces,
+            is_auto,
+        }
+        .render()
+        .unwrap(),
+    )
 }
 
 /// GET /preview - Preview image partial

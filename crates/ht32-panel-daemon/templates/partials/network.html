@@ -1,0 +1,11 @@
+<form hx-post="/network-interface" hx-target="#network-interface" hx-swap="innerHTML">
+    <div class="controls">
+        <button type="submit" name="interface" value="auto"
+                class="btn{% if is_auto %} active{% endif %}">Auto</button>
+        {% for iface in interfaces %}
+        <button type="submit" name="interface" value="{{ iface }}"
+                class="btn{% if !is_auto && current == *iface %} active{% endif %}">{{ iface }}</button>
+        {% endfor %}
+    </div>
+    <p class="hint">Current: {{ current }}</p>
+</form>
