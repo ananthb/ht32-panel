@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use ht32_panel_hw::lcd::framebuffer::{rgb888_to_rgb565, Framebuffer};
+use std::collections::VecDeque;
 use tiny_skia::{Color, Paint, Pixmap, Rect, Transform};
 
 use super::text::TextRenderer;
@@ -92,6 +93,58 @@ impl Canvas {
     /// Returns the line height for the specified font size.
     pub fn line_height(&self, size: f32) -> i32 {
         self.text_renderer.line_height(size)
+    }
+
+    /// Draws a scrolling line graph from historical data.
+    ///
+    /// # Arguments
+    /// * `x` - X position (left edge)
+    /// * `y` - Y position (top edge)
+    /// * `width` - Width of the graph area
+    /// * `height` - Height of the graph area
+    /// * `data` - Historical data points (oldest first, newest last)
+    /// * `max_value` - Maximum value for scaling (values above this are clamped)
+    /// * `line_color` - Color for the line/bars
+    /// * `bg_color` - Background color for the graph area
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_graph(
+        &mut self,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+        data: &VecDeque<f64>,
+        max_value: f64,
+        line_color: u32,
+        bg_color: u32,
+    ) {
+        // Draw background
+        self.fill_rect(x, y, width, height, bg_color);
+
+        if data.is_empty() || max_value <= 0.0 {
+            return;
+        }
+
+        let num_points = data.len();
+        let bar_width = (width as f64 / num_points as f64).max(1.0);
+
+        // Draw bars from left to right (oldest to newest)
+        for (i, &value) in data.iter().enumerate() {
+            let normalized = (value / max_value).min(1.0);
+            let bar_height = (normalized * height as f64) as u32;
+
+            if bar_height > 0 {
+                let bar_x = x + (i as f64 * bar_width) as i32;
+                let bar_y = y + (height - bar_height) as i32;
+                self.fill_rect(
+                    bar_x,
+                    bar_y,
+                    bar_width.ceil() as u32,
+                    bar_height,
+                    line_color,
+                );
+            }
+        }
     }
 
     /// Renders the canvas to a framebuffer.

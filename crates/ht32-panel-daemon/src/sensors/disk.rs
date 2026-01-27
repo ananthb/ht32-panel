@@ -1,6 +1,8 @@
 //! Disk I/O sensor.
 
+use super::data::HISTORY_SIZE;
 use super::Sensor;
+use std::collections::VecDeque;
 use std::fs;
 use std::time::Instant;
 
@@ -13,6 +15,8 @@ pub struct DiskSensor {
     last_time: Option<Instant>,
     last_read_rate: f64,
     last_write_rate: f64,
+    /// History of combined I/O rates (bytes/sec)
+    history: VecDeque<f64>,
 }
 
 impl DiskSensor {
@@ -26,6 +30,7 @@ impl DiskSensor {
             last_time: None,
             last_read_rate: 0.0,
             last_write_rate: 0.0,
+            history: VecDeque::with_capacity(HISTORY_SIZE),
         }
     }
 
@@ -83,6 +88,11 @@ impl DiskSensor {
     pub fn write_rate(&self) -> f64 {
         self.last_write_rate
     }
+
+    /// Returns the I/O history (combined read+write rates).
+    pub fn history(&self) -> &VecDeque<f64> {
+        &self.history
+    }
 }
 
 impl Sensor for DiskSensor {
@@ -102,6 +112,13 @@ impl Sensor for DiskSensor {
                     const SECTOR_SIZE: f64 = 512.0;
                     self.last_read_rate = (read_delta as f64 * SECTOR_SIZE) / elapsed;
                     self.last_write_rate = (write_delta as f64 * SECTOR_SIZE) / elapsed;
+
+                    // Record combined rate in history
+                    let combined = self.last_read_rate + self.last_write_rate;
+                    if self.history.len() >= HISTORY_SIZE {
+                        self.history.pop_front();
+                    }
+                    self.history.push_back(combined);
                 }
             }
 

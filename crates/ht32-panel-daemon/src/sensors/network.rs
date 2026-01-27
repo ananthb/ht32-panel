@@ -1,6 +1,8 @@
 //! Network throughput sensor.
 
+use super::data::HISTORY_SIZE;
 use super::Sensor;
+use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::fs;
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -19,6 +21,8 @@ pub struct NetworkSensor {
     cached_ipv4: Option<String>,
     cached_ipv6: Option<String>,
     last_ip_check: Option<Instant>,
+    /// History of combined I/O rates (bytes/sec)
+    history: VecDeque<f64>,
 }
 
 impl NetworkSensor {
@@ -35,6 +39,7 @@ impl NetworkSensor {
             cached_ipv4: None,
             cached_ipv6: None,
             last_ip_check: None,
+            history: VecDeque::with_capacity(HISTORY_SIZE),
         }
     }
 
@@ -58,6 +63,7 @@ impl NetworkSensor {
         self.cached_ipv4 = None;
         self.cached_ipv6 = None;
         self.last_ip_check = None;
+        self.history.clear();
         info!("Network sensor switched to interface: {}", interface);
     }
 
@@ -149,6 +155,11 @@ impl NetworkSensor {
     /// Returns the network interface name.
     pub fn interface_name(&self) -> &str {
         &self.interface
+    }
+
+    /// Returns the I/O history (combined rx+tx rates).
+    pub fn history(&self) -> &VecDeque<f64> {
+        &self.history
     }
 
     /// Returns the IPv4 address for this interface (cached, refreshed every 30s).
@@ -245,6 +256,13 @@ impl Sensor for NetworkSensor {
                     let tx_delta = tx.saturating_sub(self.last_tx);
                     self.last_rx_rate = rx_delta as f64 / elapsed;
                     self.last_tx_rate = tx_delta as f64 / elapsed;
+
+                    // Record combined rate in history
+                    let combined = self.last_rx_rate + self.last_tx_rate;
+                    if self.history.len() >= HISTORY_SIZE {
+                        self.history.pop_front();
+                    }
+                    self.history.push_back(combined);
                 }
             }
 

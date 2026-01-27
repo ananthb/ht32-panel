@@ -1,5 +1,10 @@
 //! System data aggregation for faces.
 
+use std::collections::VecDeque;
+
+/// Number of history samples to keep for graphs.
+pub const HISTORY_SIZE: usize = 60;
+
 /// Aggregated system data from all sensors.
 #[derive(Debug, Clone, Default)]
 pub struct SystemData {
@@ -17,12 +22,16 @@ pub struct SystemData {
     pub disk_read_rate: f64,
     /// Disk write rate in bytes/second
     pub disk_write_rate: f64,
+    /// Disk I/O history (combined read+write rates, newest last)
+    pub disk_history: VecDeque<f64>,
     /// Network interface name
     pub net_interface: String,
     /// Network receive rate in bytes/second
     pub net_rx_rate: f64,
     /// Network transmit rate in bytes/second
     pub net_tx_rate: f64,
+    /// Network I/O history (combined rx+tx rates, newest last)
+    pub net_history: VecDeque<f64>,
     /// IPv6 address (if available)
     pub ipv6_address: Option<String>,
     /// IPv4 address (if available)

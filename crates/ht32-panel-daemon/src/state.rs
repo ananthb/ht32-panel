@@ -136,9 +136,11 @@ impl Sensors {
             ram_percent,
             disk_read_rate: self.disk.read_rate(),
             disk_write_rate: self.disk.write_rate(),
+            disk_history: self.disk.history().clone(),
             net_interface: self.network.interface_name().to_string(),
             net_rx_rate: self.network.rx_rate(),
             net_tx_rate: self.network.tx_rate(),
+            net_history: self.network.history().clone(),
             ipv6_address: self.network.ipv6_address(),
             ipv4_address: self.network.ipv4_address(),
         }

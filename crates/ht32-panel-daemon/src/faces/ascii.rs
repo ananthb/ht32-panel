@@ -41,6 +41,12 @@ struct FaceColors {
     text: u32,
     /// Dimmed text color (uptime, IPs)
     dim: u32,
+    /// Graph background
+    bar_bg: u32,
+    /// Disk graph fill color
+    bar_disk: u32,
+    /// Network graph fill color
+    bar_net: u32,
 }
 
 impl FaceColors {
@@ -49,6 +55,9 @@ impl FaceColors {
             highlight: theme.primary,
             text: theme.text,
             dim: dim_color(theme.text, theme.background, 0.5),
+            bar_bg: dim_color(theme.primary, theme.background, 0.15),
+            bar_disk: dim_color(theme.primary, theme.secondary, 0.5),
+            bar_net: theme.secondary,
         }
     }
 }
@@ -57,6 +66,12 @@ impl FaceColors {
 const FONT_LARGE: f32 = 16.0;
 const FONT_NORMAL: f32 = 14.0;
 const FONT_SMALL: f32 = 12.0;
+
+/// Graph dimensions.
+const GRAPH_HEIGHT: u32 = 14;
+
+/// Max I/O rate for graph scaling (10 MB/s)
+const MAX_IO_RATE: f64 = 10_000_000.0;
 
 /// Creates an ASCII progress bar string.
 /// Returns something like "[########........]"
@@ -122,51 +137,53 @@ impl Face for AsciiFace {
             canvas.draw_text(margin, y, &ram_text, FONT_SMALL, colors.text);
             y += canvas.line_height(FONT_SMALL) + 4;
 
-            // Disk I/O with ASCII bar (use combined rate for bar)
-            let disk_total = data.disk_read_rate + data.disk_write_rate;
-            let disk_percent = (disk_total / 10_000_000.0 * 100.0).min(100.0); // Scale: 10MB/s = 100%
-            let disk_bar = ascii_bar(disk_percent, bar_chars);
+            // Disk I/O graph
             let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
             let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
+            canvas.draw_text(margin, y, "DSK", FONT_SMALL, colors.text);
             canvas.draw_text(
-                margin,
-                y,
-                &format!("DSK {}", disk_bar),
-                FONT_SMALL,
-                colors.text,
-            );
-            y += canvas.line_height(FONT_SMALL) + 2;
-            canvas.draw_text(
-                margin + 16,
+                margin + 28,
                 y,
                 &format!("R:{} W:{}", disk_r, disk_w),
                 FONT_SMALL,
                 colors.dim,
             );
-            y += canvas.line_height(FONT_SMALL) + 4;
-
-            // Network I/O with ASCII bar
-            let net_total = data.net_rx_rate + data.net_tx_rate;
-            let net_percent = (net_total / 10_000_000.0 * 100.0).min(100.0); // Scale: 10MB/s = 100%
-            let net_bar = ascii_bar(net_percent, bar_chars);
-            let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
-            let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
-            canvas.draw_text(
+            y += canvas.line_height(FONT_SMALL) + 1;
+            canvas.draw_graph(
                 margin,
                 y,
-                &format!("NET {}", net_bar),
-                FONT_SMALL,
-                colors.text,
+                width - (margin * 2) as u32,
+                GRAPH_HEIGHT,
+                &data.disk_history,
+                MAX_IO_RATE,
+                colors.bar_disk,
+                colors.bar_bg,
             );
-            y += canvas.line_height(FONT_SMALL) + 2;
+            y += GRAPH_HEIGHT as i32 + 4;
+
+            // Network I/O graph
+            let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
+            let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
+            canvas.draw_text(margin, y, "NET", FONT_SMALL, colors.text);
             canvas.draw_text(
-                margin + 16,
+                margin + 28,
                 y,
                 &format!("D:{} U:{}", net_rx, net_tx),
                 FONT_SMALL,
                 colors.dim,
             );
-            y += canvas.line_height(FONT_SMALL) + 6;
+            y += canvas.line_height(FONT_SMALL) + 1;
+            canvas.draw_graph(
+                margin,
+                y,
+                width - (margin * 2) as u32,
+                GRAPH_HEIGHT,
+                &data.net_history,
+                MAX_IO_RATE,
+                colors.bar_net,
+                colors.bar_bg,
+            );
+            y += GRAPH_HEIGHT as i32 + 6;
 
             // Network interface and IPs (indented under interface name)
             canvas.draw_text(margin, y, &data.net_interface, FONT_SMALL, colors.highlight);
@@ -216,25 +233,53 @@ impl Face for AsciiFace {
             canvas.draw_text(margin, y, &ram_text, FONT_NORMAL, colors.text);
             y += canvas.line_height(FONT_NORMAL) + 4;
 
-            // Disk I/O with ASCII bar
-            let disk_total = data.disk_read_rate + data.disk_write_rate;
-            let disk_percent = (disk_total / 10_000_000.0 * 100.0).min(100.0);
-            let disk_bar = ascii_bar(disk_percent, bar_chars);
+            // Disk I/O graph
             let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
             let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
-            let disk_text = format!("DSK {}  R:{} W:{}", disk_bar, disk_r, disk_w);
-            canvas.draw_text(margin, y, &disk_text, FONT_NORMAL, colors.text);
-            y += canvas.line_height(FONT_NORMAL) + 2;
+            canvas.draw_text(margin, y, "DSK", FONT_NORMAL, colors.text);
+            canvas.draw_text(
+                margin + 40,
+                y,
+                &format!("R:{} W:{}", disk_r, disk_w),
+                FONT_NORMAL,
+                colors.dim,
+            );
+            y += canvas.line_height(FONT_NORMAL) + 1;
+            canvas.draw_graph(
+                margin,
+                y,
+                width - (margin * 2) as u32,
+                GRAPH_HEIGHT,
+                &data.disk_history,
+                MAX_IO_RATE,
+                colors.bar_disk,
+                colors.bar_bg,
+            );
+            y += GRAPH_HEIGHT as i32 + 3;
 
-            // Network I/O with ASCII bar
-            let net_total = data.net_rx_rate + data.net_tx_rate;
-            let net_percent = (net_total / 10_000_000.0 * 100.0).min(100.0);
-            let net_bar = ascii_bar(net_percent, bar_chars);
+            // Network I/O graph
             let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
             let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
-            let net_text = format!("NET {}  D:{} U:{}", net_bar, net_rx, net_tx);
-            canvas.draw_text(margin, y, &net_text, FONT_NORMAL, colors.text);
-            y += canvas.line_height(FONT_NORMAL) + 6;
+            canvas.draw_text(margin, y, "NET", FONT_NORMAL, colors.text);
+            canvas.draw_text(
+                margin + 40,
+                y,
+                &format!("D:{} U:{}", net_rx, net_tx),
+                FONT_NORMAL,
+                colors.dim,
+            );
+            y += canvas.line_height(FONT_NORMAL) + 1;
+            canvas.draw_graph(
+                margin,
+                y,
+                width - (margin * 2) as u32,
+                GRAPH_HEIGHT,
+                &data.net_history,
+                MAX_IO_RATE,
+                colors.bar_net,
+                colors.bar_bg,
+            );
+            y += GRAPH_HEIGHT as i32 + 4;
 
             // Network interface and IPs (indented under interface name)
             canvas.draw_text(
