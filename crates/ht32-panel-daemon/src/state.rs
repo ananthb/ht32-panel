@@ -51,7 +51,7 @@ pub struct DisplaySettings {
     #[serde(default = "default_led_value")]
     pub led_speed: u8,
 
-    /// Refresh interval in milliseconds (200-60000).
+    /// Refresh interval in milliseconds (1500-10000).
     #[serde(default = "default_refresh_interval")]
     pub refresh_interval_ms: u32,
 
@@ -77,7 +77,7 @@ fn default_led_value() -> u8 {
 }
 
 fn default_refresh_interval() -> u32 {
-    500 // 500ms default
+    2000 // 2 second default
 }
 
 impl Default for DisplaySettings {
@@ -126,7 +126,7 @@ impl Sensors {
         }
     }
 
-    fn sample(&mut self, show_seconds: bool) -> SystemData {
+    fn sample(&mut self) -> SystemData {
         // Sample all sensors
         let cpu_percent = self.cpu.sample();
         let ram_percent = self.memory.sample();
@@ -135,7 +135,7 @@ impl Sensors {
 
         SystemData {
             hostname: self.system.hostname(),
-            time: self.system.time(show_seconds),
+            time: self.system.time(),
             uptime: self.system.uptime(),
             cpu_percent,
             ram_percent,
@@ -196,7 +196,7 @@ pub struct AppState {
     /// Background image path (optional)
     background_image: RwLock<Option<PathBuf>>,
 
-    /// Refresh interval in milliseconds (200-60000)
+    /// Refresh interval in milliseconds (1500-10000)
     refresh_interval_ms: RwLock<u32>,
 
     /// Network interface to monitor (None = auto-detect)
@@ -399,9 +399,9 @@ impl AppState {
         *self.refresh_interval_ms.read().unwrap()
     }
 
-    /// Sets the refresh interval in milliseconds (clamped to 200-60000).
+    /// Sets the refresh interval in milliseconds (clamped to 1500-10000).
     pub fn set_refresh_interval_ms(&self, ms: u32) {
-        let clamped = ms.clamp(200, 60000);
+        let clamped = ms.clamp(1500, 10000);
         *self.refresh_interval_ms.write().unwrap() = clamped;
         self.save_display_settings();
         info!("Refresh interval set to {}ms", clamped);
@@ -457,9 +457,7 @@ impl AppState {
     /// Samples all sensors and returns the current system data.
     fn sample_sensors(&self) -> SystemData {
         let mut sensors = self.sensors.lock().unwrap();
-        // Show seconds in clock if refresh interval is 1 second or less
-        let show_seconds = self.refresh_interval_ms() <= 1000;
-        sensors.sample(show_seconds)
+        sensors.sample()
     }
 
     /// Renders a frame and updates the display.

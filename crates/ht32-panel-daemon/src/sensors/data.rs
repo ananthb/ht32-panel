@@ -5,7 +5,7 @@
 pub struct SystemData {
     /// Hostname of the system
     pub hostname: String,
-    /// Current time formatted as "HH:MM" or "HH:MM:SS" (with seconds when refresh interval <= 1s)
+    /// Current time formatted as "HH:MM"
     pub time: String,
     /// Uptime formatted as "Xd Yh Zm"
     pub uptime: String,

@@ -22,8 +22,8 @@ impl SystemInfo {
             .unwrap_or_else(|_| "unknown".to_string())
     }
 
-    /// Returns the current time formatted as "HH:MM" or "HH:MM:SS".
-    pub fn time(&self, show_seconds: bool) -> String {
+    /// Returns the current time formatted as "HH:MM".
+    pub fn time(&self) -> String {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default();
@@ -34,13 +34,8 @@ impl SystemInfo {
         let local_secs = secs + self.timezone_offset();
         let hours = (local_secs % 86400) / 3600;
         let minutes = (local_secs % 3600) / 60;
-        let seconds = local_secs % 60;
 
-        if show_seconds {
-            format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
-        } else {
-            format!("{:02}:{:02}", hours, minutes)
-        }
+        format!("{:02}:{:02}", hours, minutes)
     }
 
     /// Returns the timezone offset in seconds from UTC.

@@ -11,8 +11,8 @@
     <h2>Display Preview</h2>
     <img id="lcd-preview" src="/lcd.png" alt="LCD Preview">
     <div class="refresh-controls">
-        <label>Refresh Interval: <span id="refresh-value">500</span>ms</label>
-        <input type="range" id="refresh-slider" min="200" max="10000" step="100" value="500">
+        <label>Refresh Interval: <span id="refresh-value">2000</span>ms</label>
+        <input type="range" id="refresh-slider" min="1500" max="10000" step="500" value="2000">
     </div>
 </div>
 <script>
@@ -39,7 +39,7 @@
         start(parseInt(this.value));
     };
 
-    start(500);
+    start(2000);
 })();
 </script>
 

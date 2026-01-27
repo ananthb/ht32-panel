@@ -100,12 +100,12 @@ enum LcdCommands {
     },
     /// Set or show the current face
     Face {
-        /// Face name: minimal, detailed (omit to show current)
+        /// Face name: ascii, professional (omit to show current)
         face: Option<String>,
     },
     /// Set or show the refresh interval
     Refresh {
-        /// Refresh interval in milliseconds (200-60000, omit to show current)
+        /// Refresh interval in milliseconds (1500-10000, omit to show current)
         milliseconds: Option<u32>,
     },
     /// Show device information
@@ -229,8 +229,8 @@ async fn handle_lcd(action: LcdCommands, client: &DaemonClient) -> Result<()> {
         }
         LcdCommands::Refresh { milliseconds } => {
             if let Some(ms) = milliseconds {
-                if !(200..=60000).contains(&ms) {
-                    anyhow::bail!("Refresh interval must be between 200 and 60000 milliseconds");
+                if !(1500..=10000).contains(&ms) {
+                    anyhow::bail!("Refresh interval must be between 1500 and 10000 milliseconds");
                 }
                 client.set_refresh_interval(ms).await?;
                 println!("Refresh interval set to: {}ms", ms);

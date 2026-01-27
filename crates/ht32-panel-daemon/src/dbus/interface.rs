@@ -291,11 +291,11 @@ impl Daemon1Interface {
         self.state.refresh_interval_ms()
     }
 
-    /// Sets the refresh interval in milliseconds (200-60000).
+    /// Sets the refresh interval in milliseconds (1500-10000).
     fn set_refresh_interval(&self, ms: u32) -> zbus::fdo::Result<()> {
-        if !(200..=60000).contains(&ms) {
+        if !(1500..=10000).contains(&ms) {
             return Err(zbus::fdo::Error::InvalidArgs(
-                "Refresh interval must be 200-60000 milliseconds".to_string(),
+                "Refresh interval must be 1500-10000 milliseconds".to_string(),
             ));
         }
         self.state.set_refresh_interval_ms(ms);

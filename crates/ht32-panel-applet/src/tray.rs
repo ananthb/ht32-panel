@@ -27,10 +27,9 @@ const FACES: &[(&str, &str)] = &[("ASCII", "ascii"), ("Professional", "professio
 
 /// Refresh interval options in milliseconds: (display name, milliseconds)
 const REFRESH_INTERVALS: &[(&str, u32)] = &[
-    ("200ms", 200),
-    ("500ms", 500),
-    ("1 second", 1000),
+    ("1.5 seconds", 1500),
     ("2 seconds", 2000),
+    ("3 seconds", 3000),
     ("5 seconds", 5000),
     ("10 seconds", 10000),
 ];
@@ -70,7 +69,7 @@ impl Default for TrayState {
             led_speed: 3,
             orientation: "landscape".to_string(),
             face: "professional".to_string(),
-            refresh_interval: 500, // 500ms default
+            refresh_interval: 2000, // 2 second default
             network_interface: String::new(),
             network_interfaces: Vec::new(),
         }
