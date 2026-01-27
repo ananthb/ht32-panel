@@ -390,19 +390,17 @@ impl Face for ProfessionalFace {
             );
             y += GRAPH_HEIGHT as i32 + 4;
 
-            // Network interface and IPs (landscape: IPs on same line)
+            // Network interface and IPs (indented under interface name)
             canvas.draw_text(margin, y, &data.net_interface, FONT_SMALL, colors.highlight);
             y += canvas.line_height(FONT_SMALL) + 2;
 
             let indent = margin + 12;
-            let ip_text = match (&data.ipv6_address, &data.ipv4_address) {
-                (Some(v6), Some(v4)) => format!("{}, {}", v6, v4),
-                (Some(v6), None) => v6.clone(),
-                (None, Some(v4)) => v4.clone(),
-                (None, None) => String::new(),
-            };
-            if !ip_text.is_empty() {
-                canvas.draw_text(indent, y, &ip_text, FONT_SMALL, colors.dim);
+            if let Some(ref ipv6) = data.ipv6_address {
+                canvas.draw_text(indent, y, ipv6, FONT_SMALL, colors.dim);
+                y += canvas.line_height(FONT_SMALL) + 2;
+            }
+            if let Some(ref ipv4) = data.ipv4_address {
+                canvas.draw_text(indent, y, ipv4, FONT_SMALL, colors.dim);
             }
         }
     }
