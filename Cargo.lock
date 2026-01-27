@@ -1015,6 +1015,7 @@ dependencies = [
  "fontdue",
  "ht32-panel-hw",
  "image",
+ "libc",
  "png 0.17.16",
  "serde",
  "thiserror 1.0.69",

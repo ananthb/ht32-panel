@@ -1,8 +1,9 @@
 //! Network throughput sensor.
 
 use super::Sensor;
+use std::ffi::CStr;
 use std::fs;
-use std::process::Command;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::time::Instant;
 use tracing::info;
 
@@ -177,39 +178,53 @@ impl NetworkSensor {
         }
     }
 
-    /// Gets IPv4 and IPv6 addresses for an interface using `ip addr`.
+    /// Gets IPv4 and IPv6 addresses for an interface using getifaddrs.
     fn get_ip_addresses(interface: &str) -> (Option<String>, Option<String>) {
         let mut ipv4 = None;
         let mut ipv6 = None;
 
-        // Run `ip -o addr show <interface>` to get addresses
-        if let Ok(output) = Command::new("ip")
-            .args(["-o", "addr", "show", interface])
-            .output()
-        {
-            if let Ok(stdout) = String::from_utf8(output.stdout) {
-                for line in stdout.lines() {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    // Format: "2: eth0    inet 192.168.1.100/24 ..."
-                    // or:     "2: eth0    inet6 fe80::1/64 ..."
-                    if let Some(idx) = parts.iter().position(|&p| p == "inet" || p == "inet6") {
-                        if idx + 1 < parts.len() {
-                            let addr_with_prefix = parts[idx + 1];
-                            // Remove the /prefix
-                            let addr = addr_with_prefix.split('/').next().unwrap_or("");
+        // SAFETY: getifaddrs is a standard POSIX function. We properly free the
+        // list with freeifaddrs when done.
+        unsafe {
+            let mut ifaddrs: *mut libc::ifaddrs = std::ptr::null_mut();
+            if libc::getifaddrs(&mut ifaddrs) != 0 {
+                return (None, None);
+            }
 
-                            if parts[idx] == "inet" && ipv4.is_none() {
-                                ipv4 = Some(addr.to_string());
-                            } else if parts[idx] == "inet6" && ipv6.is_none() {
-                                // Skip link-local addresses (fe80::)
-                                if !addr.starts_with("fe80:") {
-                                    ipv6 = Some(addr.to_string());
-                                }
+            let mut current = ifaddrs;
+            while !current.is_null() {
+                let ifa = &*current;
+
+                // Check if this is the interface we're looking for
+                if !ifa.ifa_name.is_null() {
+                    let name = CStr::from_ptr(ifa.ifa_name).to_string_lossy();
+                    if name == interface && !ifa.ifa_addr.is_null() {
+                        let family = (*ifa.ifa_addr).sa_family as i32;
+
+                        if family == libc::AF_INET && ipv4.is_none() {
+                            // IPv4 address
+                            let sockaddr_in = ifa.ifa_addr as *const libc::sockaddr_in;
+                            let addr_bytes = (*sockaddr_in).sin_addr.s_addr.to_ne_bytes();
+                            let addr = Ipv4Addr::from(addr_bytes);
+                            ipv4 = Some(addr.to_string());
+                        } else if family == libc::AF_INET6 && ipv6.is_none() {
+                            // IPv6 address
+                            let sockaddr_in6 = ifa.ifa_addr as *const libc::sockaddr_in6;
+                            let addr_bytes = (*sockaddr_in6).sin6_addr.s6_addr;
+                            let addr = Ipv6Addr::from(addr_bytes);
+
+                            // Skip link-local addresses (fe80::)
+                            if !addr.to_string().starts_with("fe80:") {
+                                ipv6 = Some(addr.to_string());
                             }
                         }
                     }
                 }
+
+                current = ifa.ifa_next;
             }
+
+            libc::freeifaddrs(ifaddrs);
         }
 
         (ipv4, ipv6)
