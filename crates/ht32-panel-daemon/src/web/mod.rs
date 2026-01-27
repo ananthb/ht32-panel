@@ -11,6 +11,7 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 
+use crate::sensors::data::IpDisplayPreference;
 use crate::state::AppState;
 use ht32_panel_hw::Orientation;
 
@@ -66,6 +67,20 @@ struct NetworkTemplate {
     is_auto: bool,
 }
 
+/// IP display option for template.
+struct IpDisplayOption {
+    value: String,
+    name: &'static str,
+}
+
+/// IP display preference partial template.
+#[derive(Template)]
+#[template(path = "partials/ip-display.html")]
+struct IpDisplayTemplate {
+    current: String,
+    options: Vec<IpDisplayOption>,
+}
+
 /// Preview partial template.
 #[derive(Template)]
 #[template(path = "partials/preview.html")]
@@ -90,6 +105,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/network-interface",
             get(network_interface_get).post(network_interface_set),
         )
+        .route("/ip-display", get(ip_display_get).post(ip_display_set))
         .route("/preview", get(preview_get))
         .route("/refresh-interval", post(refresh_interval_set))
         // State
@@ -302,6 +318,45 @@ async fn network_interface_set(
         .render()
         .unwrap(),
     )
+}
+
+/// GET /ip-display - IP display preference controls partial
+async fn ip_display_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let current = state.ip_display().to_string();
+    let options: Vec<IpDisplayOption> = IpDisplayPreference::all()
+        .iter()
+        .map(|p| IpDisplayOption {
+            value: p.to_string(),
+            name: p.display_name(),
+        })
+        .collect();
+    Html(IpDisplayTemplate { current, options }.render().unwrap())
+}
+
+/// Form data for IP display preference.
+#[derive(Deserialize)]
+struct IpDisplayForm {
+    preference: String,
+}
+
+/// POST /ip-display - Set IP display preference
+async fn ip_display_set(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<IpDisplayForm>,
+) -> impl IntoResponse {
+    if let Ok(pref) = form.preference.parse::<IpDisplayPreference>() {
+        state.set_ip_display(pref);
+    }
+
+    let current = state.ip_display().to_string();
+    let options: Vec<IpDisplayOption> = IpDisplayPreference::all()
+        .iter()
+        .map(|p| IpDisplayOption {
+            value: p.to_string(),
+            name: p.display_name(),
+        })
+        .collect();
+    Html(IpDisplayTemplate { current, options }.render().unwrap())
 }
 
 /// GET /preview - Preview image partial

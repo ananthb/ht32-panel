@@ -5,6 +5,67 @@ use std::collections::VecDeque;
 /// Number of history samples to keep for graphs.
 pub const HISTORY_SIZE: usize = 60;
 
+/// IP address display preference.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum IpDisplayPreference {
+    /// IPv6 Global Unicast Address (2000::/3)
+    #[default]
+    Ipv6Gua,
+    /// IPv6 Link-Local Address (fe80::/10)
+    Ipv6Lla,
+    /// IPv6 Unique Local Address (fc00::/7)
+    Ipv6Ula,
+    /// IPv4 address
+    Ipv4,
+}
+
+impl IpDisplayPreference {
+    /// Returns all available preferences.
+    pub fn all() -> &'static [IpDisplayPreference] {
+        &[
+            IpDisplayPreference::Ipv6Gua,
+            IpDisplayPreference::Ipv6Lla,
+            IpDisplayPreference::Ipv6Ula,
+            IpDisplayPreference::Ipv4,
+        ]
+    }
+
+    /// Returns the display name for this preference.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            IpDisplayPreference::Ipv6Gua => "IPv6 GUA",
+            IpDisplayPreference::Ipv6Lla => "IPv6 LLA",
+            IpDisplayPreference::Ipv6Ula => "IPv6 ULA",
+            IpDisplayPreference::Ipv4 => "IPv4",
+        }
+    }
+}
+
+impl std::fmt::Display for IpDisplayPreference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IpDisplayPreference::Ipv6Gua => write!(f, "ipv6-gua"),
+            IpDisplayPreference::Ipv6Lla => write!(f, "ipv6-lla"),
+            IpDisplayPreference::Ipv6Ula => write!(f, "ipv6-ula"),
+            IpDisplayPreference::Ipv4 => write!(f, "ipv4"),
+        }
+    }
+}
+
+impl std::str::FromStr for IpDisplayPreference {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "ipv6-gua" | "ipv6_gua" | "ipv6gua" | "gua" => Ok(IpDisplayPreference::Ipv6Gua),
+            "ipv6-lla" | "ipv6_lla" | "ipv6lla" | "lla" => Ok(IpDisplayPreference::Ipv6Lla),
+            "ipv6-ula" | "ipv6_ula" | "ipv6ula" | "ula" => Ok(IpDisplayPreference::Ipv6Ula),
+            "ipv4" | "v4" => Ok(IpDisplayPreference::Ipv4),
+            _ => Err(format!("Unknown IP display preference: {}", s)),
+        }
+    }
+}
+
 /// Aggregated system data from all sensors.
 #[derive(Debug, Clone, Default)]
 pub struct SystemData {
@@ -34,10 +95,8 @@ pub struct SystemData {
     pub net_tx_rate: f64,
     /// Network I/O history (combined rx+tx rates, newest last)
     pub net_history: VecDeque<f64>,
-    /// IPv6 address (if available)
-    pub ipv6_address: Option<String>,
-    /// IPv4 address (if available)
-    pub ipv4_address: Option<String>,
+    /// IP address to display (based on preference)
+    pub display_ip: Option<String>,
 }
 
 impl SystemData {

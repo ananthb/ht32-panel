@@ -1,0 +1,10 @@
+<form hx-post="/ip-display" hx-target="#ip-display" hx-swap="innerHTML" hx-disabled-elt="find button">
+    <div class="controls">
+        {% for opt in options %}
+        <button type="submit" name="preference" value="{{ opt.value }}"
+                class="btn{% if current == opt.value %} active{% endif %}">{{ opt.name }}</button>
+        {% endfor %}
+        <span class="htmx-indicator spinner"></span>
+    </div>
+    <p class="hint">Display IP address next to hostname</p>
+</form>

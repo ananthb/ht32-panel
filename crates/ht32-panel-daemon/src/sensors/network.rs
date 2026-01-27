@@ -19,7 +19,12 @@ pub struct NetworkSensor {
     last_rx_rate: f64,
     last_tx_rate: f64,
     cached_ipv4: Option<String>,
-    cached_ipv6: Option<String>,
+    /// IPv6 Global Unicast Address (2000::/3)
+    cached_ipv6_gua: Option<String>,
+    /// IPv6 Link-Local Address (fe80::/10)
+    cached_ipv6_lla: Option<String>,
+    /// IPv6 Unique Local Address (fc00::/7)
+    cached_ipv6_ula: Option<String>,
     last_ip_check: Option<Instant>,
     /// History of combined I/O rates (bytes/sec)
     history: VecDeque<f64>,
@@ -37,7 +42,9 @@ impl NetworkSensor {
             last_rx_rate: 0.0,
             last_tx_rate: 0.0,
             cached_ipv4: None,
-            cached_ipv6: None,
+            cached_ipv6_gua: None,
+            cached_ipv6_lla: None,
+            cached_ipv6_ula: None,
             last_ip_check: None,
             history: VecDeque::with_capacity(HISTORY_SIZE),
         }
@@ -61,7 +68,9 @@ impl NetworkSensor {
         self.last_rx_rate = 0.0;
         self.last_tx_rate = 0.0;
         self.cached_ipv4 = None;
-        self.cached_ipv6 = None;
+        self.cached_ipv6_gua = None;
+        self.cached_ipv6_lla = None;
+        self.cached_ipv6_ula = None;
         self.last_ip_check = None;
         self.history.clear();
         info!("Network sensor switched to interface: {}", interface);
@@ -168,10 +177,22 @@ impl NetworkSensor {
         self.cached_ipv4.clone()
     }
 
-    /// Returns the IPv6 address for this interface (cached, refreshed every 30s).
-    pub fn ipv6_address(&mut self) -> Option<String> {
+    /// Returns the IPv6 GUA (Global Unicast Address) for this interface.
+    pub fn ipv6_gua(&mut self) -> Option<String> {
         self.refresh_ip_cache();
-        self.cached_ipv6.clone()
+        self.cached_ipv6_gua.clone()
+    }
+
+    /// Returns the IPv6 LLA (Link-Local Address) for this interface.
+    pub fn ipv6_lla(&mut self) -> Option<String> {
+        self.refresh_ip_cache();
+        self.cached_ipv6_lla.clone()
+    }
+
+    /// Returns the IPv6 ULA (Unique Local Address) for this interface.
+    pub fn ipv6_ula(&mut self) -> Option<String> {
+        self.refresh_ip_cache();
+        self.cached_ipv6_ula.clone()
     }
 
     /// Refreshes the IP address cache if stale (older than 30 seconds).
@@ -182,24 +203,25 @@ impl NetworkSensor {
             .unwrap_or(true);
 
         if should_refresh {
-            let (ipv4, ipv6) = Self::get_ip_addresses(&self.interface);
-            self.cached_ipv4 = ipv4;
-            self.cached_ipv6 = ipv6;
+            let addrs = Self::get_ip_addresses(&self.interface);
+            self.cached_ipv4 = addrs.ipv4;
+            self.cached_ipv6_gua = addrs.ipv6_gua;
+            self.cached_ipv6_lla = addrs.ipv6_lla;
+            self.cached_ipv6_ula = addrs.ipv6_ula;
             self.last_ip_check = Some(Instant::now());
         }
     }
 
-    /// Gets IPv4 and IPv6 addresses for an interface using getifaddrs.
-    fn get_ip_addresses(interface: &str) -> (Option<String>, Option<String>) {
-        let mut ipv4 = None;
-        let mut ipv6 = None;
+    /// Gets all IP addresses for an interface using getifaddrs.
+    fn get_ip_addresses(interface: &str) -> IpAddresses {
+        let mut addrs = IpAddresses::default();
 
         // SAFETY: getifaddrs is a standard POSIX function. We properly free the
         // list with freeifaddrs when done.
         unsafe {
             let mut ifaddrs: *mut libc::ifaddrs = std::ptr::null_mut();
             if libc::getifaddrs(&mut ifaddrs) != 0 {
-                return (None, None);
+                return addrs;
             }
 
             let mut current = ifaddrs;
@@ -212,21 +234,36 @@ impl NetworkSensor {
                     if name == interface && !ifa.ifa_addr.is_null() {
                         let family = (*ifa.ifa_addr).sa_family as i32;
 
-                        if family == libc::AF_INET && ipv4.is_none() {
+                        if family == libc::AF_INET && addrs.ipv4.is_none() {
                             // IPv4 address
                             let sockaddr_in = ifa.ifa_addr as *const libc::sockaddr_in;
                             let addr_bytes = (*sockaddr_in).sin_addr.s_addr.to_ne_bytes();
                             let addr = Ipv4Addr::from(addr_bytes);
-                            ipv4 = Some(addr.to_string());
-                        } else if family == libc::AF_INET6 && ipv6.is_none() {
-                            // IPv6 address
+                            addrs.ipv4 = Some(addr.to_string());
+                        } else if family == libc::AF_INET6 {
+                            // IPv6 address - classify by type
                             let sockaddr_in6 = ifa.ifa_addr as *const libc::sockaddr_in6;
                             let addr_bytes = (*sockaddr_in6).sin6_addr.s6_addr;
                             let addr = Ipv6Addr::from(addr_bytes);
+                            let addr_str = addr.to_string();
 
-                            // Skip link-local addresses (fe80::)
-                            if !addr.to_string().starts_with("fe80:") {
-                                ipv6 = Some(addr.to_string());
+                            // Classify IPv6 address type
+                            let first_byte = addr_bytes[0];
+                            if first_byte == 0xfe && (addr_bytes[1] & 0xc0) == 0x80 {
+                                // Link-Local (fe80::/10)
+                                if addrs.ipv6_lla.is_none() {
+                                    addrs.ipv6_lla = Some(addr_str);
+                                }
+                            } else if first_byte == 0xfc || first_byte == 0xfd {
+                                // Unique Local (fc00::/7, typically fd00::/8)
+                                if addrs.ipv6_ula.is_none() {
+                                    addrs.ipv6_ula = Some(addr_str);
+                                }
+                            } else if (first_byte & 0xe0) == 0x20 {
+                                // Global Unicast (2000::/3)
+                                if addrs.ipv6_gua.is_none() {
+                                    addrs.ipv6_gua = Some(addr_str);
+                                }
                             }
                         }
                     }
@@ -238,8 +275,17 @@ impl NetworkSensor {
             libc::freeifaddrs(ifaddrs);
         }
 
-        (ipv4, ipv6)
+        addrs
     }
+}
+
+/// Container for all IP address types.
+#[derive(Default)]
+struct IpAddresses {
+    ipv4: Option<String>,
+    ipv6_gua: Option<String>,
+    ipv6_lla: Option<String>,
+    ipv6_ula: Option<String>,
 }
 
 impl Sensor for NetworkSensor {

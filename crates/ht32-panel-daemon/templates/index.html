@@ -69,10 +69,19 @@
         </div>
     </div>
 
-    <div class="card">
-        <h2>Network Interface</h2>
-        <div id="network-interface" hx-get="/network-interface" hx-trigger="load" hx-swap="innerHTML">
-            Loading...
+    <div class="card-row">
+        <div class="card">
+            <h2>Network Interface</h2>
+            <div id="network-interface" hx-get="/network-interface" hx-trigger="load" hx-swap="innerHTML">
+                Loading...
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>IP Display</h2>
+            <div id="ip-display" hx-get="/ip-display" hx-trigger="load" hx-swap="innerHTML">
+                Loading...
+            </div>
         </div>
     </div>
 </div>

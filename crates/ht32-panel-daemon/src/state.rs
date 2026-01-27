@@ -17,8 +17,8 @@ use crate::config::Config;
 use crate::faces::{self, Face, Theme};
 use crate::rendering::Canvas;
 use crate::sensors::{
-    data::SystemData, CpuSensor, DiskSensor, MemorySensor, NetworkSensor, Sensor, SystemInfo,
-    TemperatureSensor,
+    data::{IpDisplayPreference, SystemData},
+    CpuSensor, DiskSensor, MemorySensor, NetworkSensor, Sensor, SystemInfo, TemperatureSensor,
 };
 
 /// Display settings persisted to state directory.
@@ -55,6 +55,14 @@ pub struct DisplaySettings {
     /// Network interface to monitor (None = auto-detect).
     #[serde(default)]
     pub network_interface: Option<String>,
+
+    /// IP address display preference.
+    #[serde(default = "default_ip_display")]
+    pub ip_display: String,
+}
+
+fn default_ip_display() -> String {
+    "ipv6-gua".to_string()
 }
 
 fn default_face() -> String {
@@ -88,6 +96,7 @@ impl Default for DisplaySettings {
             led_speed: default_led_value(),
             refresh_interval_ms: default_refresh_interval(),
             network_interface: None,
+            ip_display: default_ip_display(),
         }
     }
 }
@@ -125,7 +134,7 @@ impl Sensors {
         }
     }
 
-    fn sample(&mut self) -> SystemData {
+    fn sample(&mut self, ip_preference: IpDisplayPreference) -> SystemData {
         // Sample all sensors
         let cpu_percent = self.cpu.sample();
         let _ = self.temperature.sample(); // Updates internal state
@@ -133,6 +142,14 @@ impl Sensors {
         let ram_percent = self.memory.sample();
         let _ = self.network.sample(); // Updates internal state
         let _ = self.disk.sample(); // Updates internal state
+
+        // Get the IP address based on preference
+        let display_ip = match ip_preference {
+            IpDisplayPreference::Ipv6Gua => self.network.ipv6_gua(),
+            IpDisplayPreference::Ipv6Lla => self.network.ipv6_lla(),
+            IpDisplayPreference::Ipv6Ula => self.network.ipv6_ula(),
+            IpDisplayPreference::Ipv4 => self.network.ipv4_address(),
+        };
 
         SystemData {
             hostname: self.system.hostname(),
@@ -148,8 +165,7 @@ impl Sensors {
             net_rx_rate: self.network.rx_rate(),
             net_tx_rate: self.network.tx_rate(),
             net_history: self.network.history().clone(),
-            ipv6_address: self.network.ipv6_address(),
-            ipv4_address: self.network.ipv4_address(),
+            display_ip,
         }
     }
 }
@@ -202,6 +218,9 @@ pub struct AppState {
 
     /// Network interface to monitor (None = auto-detect)
     network_interface: RwLock<Option<String>>,
+
+    /// IP address display preference
+    ip_display: RwLock<IpDisplayPreference>,
 }
 
 impl AppState {
@@ -268,6 +287,12 @@ impl AppState {
         info!("Display orientation: {}", orientation);
         info!("Theme: {}", settings.theme);
 
+        // Parse IP display preference
+        let ip_display: IpDisplayPreference = settings
+            .ip_display
+            .parse()
+            .unwrap_or(IpDisplayPreference::Ipv6Gua);
+
         Ok(Self {
             led_device_path: config.devices.led.clone(),
             led_theme: RwLock::new(settings.led_theme),
@@ -286,6 +311,7 @@ impl AppState {
             theme_name: RwLock::new(settings.theme),
             refresh_interval_ms: RwLock::new(settings.refresh_interval_ms),
             network_interface: RwLock::new(network_interface),
+            ip_display: RwLock::new(ip_display),
         })
     }
 
@@ -311,6 +337,7 @@ impl AppState {
             led_speed: *self.led_speed.read().unwrap(),
             refresh_interval_ms: *self.refresh_interval_ms.read().unwrap(),
             network_interface: self.network_interface.read().unwrap().clone(),
+            ip_display: self.ip_display.read().unwrap().to_string(),
         };
 
         let settings_file = self.state_dir.join("display.toml");
@@ -448,7 +475,8 @@ impl AppState {
     /// Samples all sensors and returns the current system data.
     fn sample_sensors(&self) -> SystemData {
         let mut sensors = self.sensors.lock().unwrap();
-        sensors.sample()
+        let ip_preference = *self.ip_display.read().unwrap();
+        sensors.sample(ip_preference)
     }
 
     /// Renders a frame and updates the display.
@@ -683,7 +711,20 @@ impl AppState {
             led_speed: *self.led_speed.read().unwrap(),
             refresh_interval_ms: *self.refresh_interval_ms.read().unwrap(),
             network_interface: self.network_interface.read().unwrap().clone(),
+            ip_display: self.ip_display.read().unwrap().to_string(),
         }
+    }
+
+    /// Gets the current IP display preference.
+    pub fn ip_display(&self) -> IpDisplayPreference {
+        *self.ip_display.read().unwrap()
+    }
+
+    /// Sets the IP display preference.
+    pub fn set_ip_display(&self, preference: IpDisplayPreference) {
+        *self.ip_display.write().unwrap() = preference;
+        self.save_display_settings();
+        info!("IP display preference set to: {}", preference);
     }
 
     /// Gets the current network interface (None if auto-detected).

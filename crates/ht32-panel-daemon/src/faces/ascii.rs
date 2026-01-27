@@ -115,8 +115,14 @@ impl Face for AsciiFace {
 
         if portrait {
             // Portrait layout - stack vertically
+            // Hostname with IP address below
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
             y += canvas.line_height(FONT_LARGE) + 2;
+
+            if let Some(ref ip) = data.display_ip {
+                canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
+                y += canvas.line_height(FONT_SMALL) + 2;
+            }
 
             canvas.draw_text(margin, y, &data.time, FONT_LARGE, colors.text);
             y += canvas.line_height(FONT_LARGE) + 2;
@@ -192,30 +198,16 @@ impl Face for AsciiFace {
                 colors.bar_net,
                 colors.bar_bg,
             );
-            y += GRAPH_HEIGHT as i32 + 6;
-
-            // Network interface and IPs (indented under interface name)
-            canvas.draw_text(margin, y, &data.net_interface, FONT_SMALL, colors.highlight);
-            y += canvas.line_height(FONT_SMALL) + 2;
-
-            let indent = margin + 8;
-            if let Some(ref ipv4) = data.ipv4_address {
-                canvas.draw_text(indent, y, ipv4, FONT_SMALL, colors.dim);
-                y += canvas.line_height(FONT_SMALL) + 2;
-            }
-            if let Some(ref ipv6) = data.ipv6_address {
-                // Truncate IPv6 in portrait mode to prevent cutoff
-                let max_chars = ((width as i32 - indent - margin) / 6) as usize; // ~6px per char
-                let ipv6_display = if ipv6.len() > max_chars && max_chars > 3 {
-                    format!("{}...", &ipv6[..max_chars - 3])
-                } else {
-                    ipv6.clone()
-                };
-                canvas.draw_text(indent, y, &ipv6_display, FONT_SMALL, colors.dim);
-            }
         } else {
-            // Landscape layout - side by side where possible
+            // Landscape layout - hostname with IP on same line
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
+
+            // IP address next to hostname (dim color)
+            if let Some(ref ip) = data.display_ip {
+                let hostname_width = canvas.text_width(&data.hostname, FONT_LARGE);
+                canvas.draw_text(margin + hostname_width + 8, y, ip, FONT_SMALL, colors.dim);
+            }
+
             let time_width = canvas.text_width(&data.time, FONT_LARGE);
             canvas.draw_text(
                 width as i32 - margin - time_width,
@@ -292,28 +284,6 @@ impl Face for AsciiFace {
                 colors.bar_net,
                 colors.bar_bg,
             );
-            y += GRAPH_HEIGHT as i32 + 4;
-
-            // Network interface and IPs (landscape: IPs on same line)
-            canvas.draw_text(
-                margin,
-                y,
-                &data.net_interface,
-                FONT_NORMAL,
-                colors.highlight,
-            );
-            y += canvas.line_height(FONT_NORMAL) + 2;
-
-            let indent = margin + 12;
-            let ip_text = match (&data.ipv6_address, &data.ipv4_address) {
-                (Some(v6), Some(v4)) => format!("{}, {}", v6, v4),
-                (Some(v6), None) => v6.clone(),
-                (None, Some(v4)) => v4.clone(),
-                (None, None) => String::new(),
-            };
-            if !ip_text.is_empty() {
-                canvas.draw_text(indent, y, &ip_text, FONT_SMALL, colors.dim);
-            }
         }
     }
 }

@@ -10,6 +10,7 @@ use tracing::{debug, info, warn};
 use zbus::{interface, Connection};
 
 use crate::config::DbusBusType;
+use crate::sensors::data::IpDisplayPreference;
 use crate::state::AppState;
 
 /// D-Bus signal types for state change notifications.
@@ -24,6 +25,8 @@ pub enum DaemonSignals {
     DisplaySettingsChanged,
     /// Network interface changed.
     NetworkInterfaceChanged,
+    /// IP display preference changed.
+    IpDisplayChanged,
 }
 
 /// D-Bus interface implementation for the HT32 Panel Daemon.
@@ -303,6 +306,42 @@ impl Daemon1Interface {
     #[zbus(property)]
     fn network_interface(&self) -> String {
         self.state.network_interface_config()
+    }
+
+    /// Gets the current IP display preference.
+    fn get_ip_display(&self) -> String {
+        self.state.ip_display().to_string()
+    }
+
+    /// Sets the IP display preference.
+    /// Valid values: "ipv6-gua", "ipv6-lla", "ipv6-ula", "ipv4"
+    fn set_ip_display(&self, preference: &str) -> zbus::fdo::Result<()> {
+        let pref: IpDisplayPreference = preference.parse().map_err(|e: String| {
+            zbus::fdo::Error::InvalidArgs(format!(
+                "{}. Valid: ipv6-gua, ipv6-lla, ipv6-ula, ipv4",
+                e
+            ))
+        })?;
+
+        self.state.set_ip_display(pref);
+        let _ = self.signal_tx.send(DaemonSignals::IpDisplayChanged);
+
+        debug!("D-Bus: SetIpDisplay({})", preference);
+        Ok(())
+    }
+
+    /// Lists all available IP display options.
+    fn list_ip_display_options(&self) -> Vec<String> {
+        IpDisplayPreference::all()
+            .iter()
+            .map(|p| p.to_string())
+            .collect()
+    }
+
+    /// Current IP display preference.
+    #[zbus(property)]
+    fn ip_display(&self) -> String {
+        self.state.ip_display().to_string()
     }
 }
 
