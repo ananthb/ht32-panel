@@ -88,6 +88,22 @@ struct PreviewTemplate {
     timestamp: u128,
 }
 
+/// Complication item for template.
+struct ComplicationItem {
+    id: String,
+    name: String,
+    description: String,
+    enabled: bool,
+}
+
+/// Complications partial template.
+#[derive(Template)]
+#[template(path = "partials/complications.html")]
+struct ComplicationsTemplate {
+    face_name: String,
+    complications: Vec<ComplicationItem>,
+}
+
 /// Creates the web router with all routes.
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -106,6 +122,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             get(network_interface_get).post(network_interface_set),
         )
         .route("/ip-display", get(ip_display_get).post(ip_display_set))
+        .route("/complications", get(complications_get).post(complications_set))
         .route("/preview", get(preview_get))
         .route("/refresh-interval", post(refresh_interval_set))
         // State
@@ -381,4 +398,70 @@ async fn refresh_interval_set(
 ) -> impl IntoResponse {
     state.set_refresh_interval_ms(form.interval);
     StatusCode::OK
+}
+
+/// GET /complications - Complications controls partial
+async fn complications_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let face_name = state.face_name();
+    let available = state.available_complications();
+    let enabled = state.enabled_complications();
+
+    let complications: Vec<ComplicationItem> = available
+        .into_iter()
+        .map(|c| ComplicationItem {
+            enabled: enabled.contains(&c.id),
+            id: c.id,
+            name: c.name,
+            description: c.description,
+        })
+        .collect();
+
+    Html(
+        ComplicationsTemplate {
+            face_name,
+            complications,
+        }
+        .render()
+        .unwrap(),
+    )
+}
+
+/// Form data for complication toggle.
+#[derive(Deserialize)]
+struct ComplicationForm {
+    complication: String,
+    enabled: Option<String>,
+}
+
+/// POST /complications - Toggle a complication
+async fn complications_set(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<ComplicationForm>,
+) -> impl IntoResponse {
+    let enabled = form.enabled.as_deref() == Some("on");
+    let _ = state.set_complication_enabled(&form.complication, enabled);
+
+    // Re-render the complications list
+    let face_name = state.face_name();
+    let available = state.available_complications();
+    let enabled_set = state.enabled_complications();
+
+    let complications: Vec<ComplicationItem> = available
+        .into_iter()
+        .map(|c| ComplicationItem {
+            enabled: enabled_set.contains(&c.id),
+            id: c.id,
+            name: c.name,
+            description: c.description,
+        })
+        .collect();
+
+    Html(
+        ComplicationsTemplate {
+            face_name,
+            complications,
+        }
+        .render()
+        .unwrap(),
+    )
 }

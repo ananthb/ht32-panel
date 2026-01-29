@@ -5,7 +5,7 @@
 
 use std::f32::consts::PI;
 
-use super::{Face, Theme};
+use super::{complications, Complication, EnabledComplications, Face, Theme};
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
 
@@ -139,13 +139,33 @@ impl Face for ArcsFace {
         "arcs"
     }
 
-    fn render(&self, canvas: &mut Canvas, data: &SystemData, theme: &Theme) {
+    fn available_complications(&self) -> Vec<Complication> {
+        vec![
+            Complication::new(complications::TIME, "Time", "Display the current time", true),
+            Complication::new(complications::HOSTNAME, "Hostname", "Display the system hostname", true),
+            Complication::new(complications::UPTIME, "Uptime", "Display system uptime", true),
+            Complication::new(complications::IP_ADDRESS, "IP Address", "Display network IP address", true),
+            Complication::new(complications::CPU, "CPU", "Display CPU usage arc gauge", true),
+            Complication::new(complications::RAM, "RAM", "Display RAM usage arc gauge", true),
+            Complication::new(complications::DISK_IO, "Disk I/O", "Display disk activity arcs", true),
+            Complication::new(complications::NETWORK, "Network", "Display network activity arcs", true),
+        ]
+    }
+
+    fn render(
+        &self,
+        canvas: &mut Canvas,
+        data: &SystemData,
+        theme: &Theme,
+        comp: &EnabledComplications,
+    ) {
         let colors = FaceColors::from_theme(theme);
         let (width, height) = canvas.dimensions();
         let portrait = width < 200;
 
+        let is_on = |id: &str| comp.is_enabled(self.name(), id, true);
+
         if portrait {
-            // Portrait layout - vertical stack of gauges
             let margin = 8;
             let gauge_radius = 28_u32;
             let stroke = 6.0;
@@ -153,120 +173,79 @@ impl Face for ArcsFace {
             let small_stroke = 4.0;
 
             // Time at top
-            let time_width = canvas.text_width(&data.time, FONT_LARGE);
-            let time_x = (width as i32 - time_width) / 2;
-            canvas.draw_text(time_x, margin, &data.time, FONT_LARGE, colors.text);
+            if is_on(complications::TIME) {
+                let time_width = canvas.text_width(&data.time, FONT_LARGE);
+                let time_x = (width as i32 - time_width) / 2;
+                canvas.draw_text(time_x, margin, &data.time, FONT_LARGE, colors.text);
+            }
 
-            // CPU gauge - left side
             let row1_y = margin + 24;
             let cpu_cx = margin + gauge_radius as i32 + 4;
             let cpu_cy = row1_y + gauge_radius as i32;
-            Self::draw_arc_gauge(
-                canvas,
-                cpu_cx,
-                cpu_cy,
-                gauge_radius,
-                stroke,
-                data.cpu_percent,
-                colors.primary,
-                colors.arc_bg,
-            );
-            // CPU label and value inside
-            canvas.draw_text(cpu_cx - 10, cpu_cy - 6, "CPU", FONT_TINY, colors.dim);
-            let cpu_text = format!("{:.0}", data.cpu_percent);
-            let cpu_w = canvas.text_width(&cpu_text, FONT_SMALL);
-            canvas.draw_text(cpu_cx - cpu_w / 2, cpu_cy + 4, &cpu_text, FONT_SMALL, colors.text);
 
-            // RAM gauge - right side
+            // CPU gauge
+            if is_on(complications::CPU) {
+                Self::draw_arc_gauge(canvas, cpu_cx, cpu_cy, gauge_radius, stroke,
+                    data.cpu_percent, colors.primary, colors.arc_bg);
+                canvas.draw_text(cpu_cx - 10, cpu_cy - 6, "CPU", FONT_TINY, colors.dim);
+                let cpu_text = format!("{:.0}", data.cpu_percent);
+                let cpu_w = canvas.text_width(&cpu_text, FONT_SMALL);
+                canvas.draw_text(cpu_cx - cpu_w / 2, cpu_cy + 4, &cpu_text, FONT_SMALL, colors.text);
+            }
+
+            // RAM gauge
             let ram_cx = width as i32 - margin - gauge_radius as i32 - 4;
             let ram_cy = cpu_cy;
-            Self::draw_arc_gauge(
-                canvas,
-                ram_cx,
-                ram_cy,
-                gauge_radius,
-                stroke,
-                data.ram_percent,
-                colors.secondary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(ram_cx - 10, ram_cy - 6, "RAM", FONT_TINY, colors.dim);
-            let ram_text = format!("{:.0}", data.ram_percent);
-            let ram_w = canvas.text_width(&ram_text, FONT_SMALL);
-            canvas.draw_text(ram_cx - ram_w / 2, ram_cy + 4, &ram_text, FONT_SMALL, colors.text);
+            if is_on(complications::RAM) {
+                Self::draw_arc_gauge(canvas, ram_cx, ram_cy, gauge_radius, stroke,
+                    data.ram_percent, colors.secondary, colors.arc_bg);
+                canvas.draw_text(ram_cx - 10, ram_cy - 6, "RAM", FONT_TINY, colors.dim);
+                let ram_text = format!("{:.0}", data.ram_percent);
+                let ram_w = canvas.text_width(&ram_text, FONT_SMALL);
+                canvas.draw_text(ram_cx - ram_w / 2, ram_cy + 4, &ram_text, FONT_SMALL, colors.text);
+            }
 
-            // Disk and Network - smaller arcs below
             let row2_y = row1_y + gauge_radius as i32 * 2 + 16;
-            let io_max = 100_000_000.0; // 100 MB/s max for visualization
-
-            // Disk read
+            let io_max = 100_000_000.0;
             let disk_r_cx = margin + small_radius as i32 + 4;
             let disk_r_cy = row2_y + small_radius as i32;
-            Self::draw_activity_arc(
-                canvas,
-                disk_r_cx,
-                disk_r_cy,
-                small_radius,
-                small_stroke,
-                data.disk_read_rate,
-                io_max,
-                colors.primary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(disk_r_cx - 6, disk_r_cy - 2, "R", FONT_TINY, colors.dim);
 
-            // Disk write
-            let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 8;
-            Self::draw_activity_arc(
-                canvas,
-                disk_w_cx,
-                disk_r_cy,
-                small_radius,
-                small_stroke,
-                data.disk_write_rate,
-                io_max,
-                colors.primary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(disk_w_cx - 6, disk_r_cy - 2, "W", FONT_TINY, colors.dim);
+            // Disk gauges
+            if is_on(complications::DISK_IO) {
+                Self::draw_activity_arc(canvas, disk_r_cx, disk_r_cy, small_radius, small_stroke,
+                    data.disk_read_rate, io_max, colors.primary, colors.arc_bg);
+                canvas.draw_text(disk_r_cx - 6, disk_r_cy - 2, "R", FONT_TINY, colors.dim);
 
-            // Net rx
-            let net_rx_cx = width as i32 - margin - small_radius as i32 * 4 - 12;
-            Self::draw_activity_arc(
-                canvas,
-                net_rx_cx,
-                disk_r_cy,
-                small_radius,
-                small_stroke,
-                data.net_rx_rate,
-                io_max,
-                colors.secondary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(net_rx_cx - 4, disk_r_cy - 2, "\u{2193}", FONT_TINY, colors.dim);
+                let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 8;
+                Self::draw_activity_arc(canvas, disk_w_cx, disk_r_cy, small_radius, small_stroke,
+                    data.disk_write_rate, io_max, colors.primary, colors.arc_bg);
+                canvas.draw_text(disk_w_cx - 6, disk_r_cy - 2, "W", FONT_TINY, colors.dim);
+            }
 
-            // Net tx
-            let net_tx_cx = width as i32 - margin - small_radius as i32 - 4;
-            Self::draw_activity_arc(
-                canvas,
-                net_tx_cx,
-                disk_r_cy,
-                small_radius,
-                small_stroke,
-                data.net_tx_rate,
-                io_max,
-                colors.secondary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(net_tx_cx - 4, disk_r_cy - 2, "\u{2191}", FONT_TINY, colors.dim);
+            // Network gauges
+            if is_on(complications::NETWORK) {
+                let net_rx_cx = width as i32 - margin - small_radius as i32 * 4 - 12;
+                Self::draw_activity_arc(canvas, net_rx_cx, disk_r_cy, small_radius, small_stroke,
+                    data.net_rx_rate, io_max, colors.secondary, colors.arc_bg);
+                canvas.draw_text(net_rx_cx - 4, disk_r_cy - 2, "\u{2193}", FONT_TINY, colors.dim);
+
+                let net_tx_cx = width as i32 - margin - small_radius as i32 - 4;
+                Self::draw_activity_arc(canvas, net_tx_cx, disk_r_cy, small_radius, small_stroke,
+                    data.net_tx_rate, io_max, colors.secondary, colors.arc_bg);
+                canvas.draw_text(net_tx_cx - 4, disk_r_cy - 2, "\u{2191}", FONT_TINY, colors.dim);
+            }
 
             // Hostname and uptime at bottom
             let bottom_y = height as i32 - margin - 28;
-            canvas.draw_text(margin, bottom_y, &data.hostname, FONT_SMALL, colors.dim);
-            let uptime_text = format!("Up: {}", data.uptime);
-            canvas.draw_text(margin, bottom_y + 14, &uptime_text, FONT_TINY, colors.dim);
+            if is_on(complications::HOSTNAME) {
+                canvas.draw_text(margin, bottom_y, &data.hostname, FONT_SMALL, colors.dim);
+            }
+            if is_on(complications::UPTIME) {
+                let uptime_text = format!("Up: {}", data.uptime);
+                canvas.draw_text(margin, bottom_y + 14, &uptime_text, FONT_TINY, colors.dim);
+            }
         } else {
-            // Landscape layout - larger gauges side by side
+            // Landscape layout
             let margin = 10;
             let gauge_radius = 36_u32;
             let stroke = 8.0;
@@ -274,129 +253,80 @@ impl Face for ArcsFace {
             let small_stroke = 5.0;
 
             // Time and hostname at top
-            canvas.draw_text(margin, margin, &data.time, FONT_LARGE, colors.text);
-            let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
-            canvas.draw_text(
-                width as i32 - margin - host_width,
-                margin,
-                &data.hostname,
-                FONT_SMALL,
-                colors.dim,
-            );
+            if is_on(complications::TIME) {
+                canvas.draw_text(margin, margin, &data.time, FONT_LARGE, colors.text);
+            }
+            if is_on(complications::HOSTNAME) {
+                let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
+                canvas.draw_text(width as i32 - margin - host_width, margin, &data.hostname, FONT_SMALL, colors.dim);
+            }
 
-            // Main gauges row
             let gauge_y = margin + 28 + gauge_radius as i32;
+            let cpu_cx = margin + gauge_radius as i32 + 10;
 
             // CPU gauge
-            let cpu_cx = margin + gauge_radius as i32 + 10;
-            Self::draw_arc_gauge(
-                canvas,
-                cpu_cx,
-                gauge_y,
-                gauge_radius,
-                stroke,
-                data.cpu_percent,
-                colors.primary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(cpu_cx - 10, gauge_y - 8, "CPU", FONT_TINY, colors.dim);
-            let cpu_text = format!("{:.0}%", data.cpu_percent);
-            let cpu_w = canvas.text_width(&cpu_text, FONT_NORMAL);
-            canvas.draw_text(cpu_cx - cpu_w / 2, gauge_y + 2, &cpu_text, FONT_NORMAL, colors.text);
+            if is_on(complications::CPU) {
+                Self::draw_arc_gauge(canvas, cpu_cx, gauge_y, gauge_radius, stroke,
+                    data.cpu_percent, colors.primary, colors.arc_bg);
+                canvas.draw_text(cpu_cx - 10, gauge_y - 8, "CPU", FONT_TINY, colors.dim);
+                let cpu_text = format!("{:.0}%", data.cpu_percent);
+                let cpu_w = canvas.text_width(&cpu_text, FONT_NORMAL);
+                canvas.draw_text(cpu_cx - cpu_w / 2, gauge_y + 2, &cpu_text, FONT_NORMAL, colors.text);
+            }
 
             // RAM gauge
             let ram_cx = cpu_cx + gauge_radius as i32 * 2 + 30;
-            Self::draw_arc_gauge(
-                canvas,
-                ram_cx,
-                gauge_y,
-                gauge_radius,
-                stroke,
-                data.ram_percent,
-                colors.secondary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(ram_cx - 12, gauge_y - 8, "RAM", FONT_TINY, colors.dim);
-            let ram_text = format!("{:.0}%", data.ram_percent);
-            let ram_w = canvas.text_width(&ram_text, FONT_NORMAL);
-            canvas.draw_text(ram_cx - ram_w / 2, gauge_y + 2, &ram_text, FONT_NORMAL, colors.text);
+            if is_on(complications::RAM) {
+                Self::draw_arc_gauge(canvas, ram_cx, gauge_y, gauge_radius, stroke,
+                    data.ram_percent, colors.secondary, colors.arc_bg);
+                canvas.draw_text(ram_cx - 12, gauge_y - 8, "RAM", FONT_TINY, colors.dim);
+                let ram_text = format!("{:.0}%", data.ram_percent);
+                let ram_w = canvas.text_width(&ram_text, FONT_NORMAL);
+                canvas.draw_text(ram_cx - ram_w / 2, gauge_y + 2, &ram_text, FONT_NORMAL, colors.text);
+            }
 
-            // Smaller I/O gauges on right side
             let io_x = ram_cx + gauge_radius as i32 + 40;
             let io_max = 100_000_000.0;
-
-            // Disk gauges
             let disk_r_cx = io_x;
             let disk_cy = margin + 28 + small_radius as i32;
-            Self::draw_activity_arc(
-                canvas,
-                disk_r_cx,
-                disk_cy,
-                small_radius,
-                small_stroke,
-                data.disk_read_rate,
-                io_max,
-                colors.primary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(disk_r_cx - 6, disk_cy - 2, "R", FONT_TINY, colors.dim);
 
-            let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 12;
-            Self::draw_activity_arc(
-                canvas,
-                disk_w_cx,
-                disk_cy,
-                small_radius,
-                small_stroke,
-                data.disk_write_rate,
-                io_max,
-                colors.primary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(disk_w_cx - 8, disk_cy - 2, "W", FONT_TINY, colors.dim);
+            // Disk gauges
+            if is_on(complications::DISK_IO) {
+                Self::draw_activity_arc(canvas, disk_r_cx, disk_cy, small_radius, small_stroke,
+                    data.disk_read_rate, io_max, colors.primary, colors.arc_bg);
+                canvas.draw_text(disk_r_cx - 6, disk_cy - 2, "R", FONT_TINY, colors.dim);
+
+                let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 12;
+                Self::draw_activity_arc(canvas, disk_w_cx, disk_cy, small_radius, small_stroke,
+                    data.disk_write_rate, io_max, colors.primary, colors.arc_bg);
+                canvas.draw_text(disk_w_cx - 8, disk_cy - 2, "W", FONT_TINY, colors.dim);
+            }
 
             // Network gauges
             let net_cy = disk_cy + small_radius as i32 * 2 + 12;
-            Self::draw_activity_arc(
-                canvas,
-                disk_r_cx,
-                net_cy,
-                small_radius,
-                small_stroke,
-                data.net_rx_rate,
-                io_max,
-                colors.secondary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(disk_r_cx - 4, net_cy - 2, "\u{2193}", FONT_TINY, colors.dim);
+            if is_on(complications::NETWORK) {
+                Self::draw_activity_arc(canvas, disk_r_cx, net_cy, small_radius, small_stroke,
+                    data.net_rx_rate, io_max, colors.secondary, colors.arc_bg);
+                canvas.draw_text(disk_r_cx - 4, net_cy - 2, "\u{2193}", FONT_TINY, colors.dim);
 
-            Self::draw_activity_arc(
-                canvas,
-                disk_w_cx,
-                net_cy,
-                small_radius,
-                small_stroke,
-                data.net_tx_rate,
-                io_max,
-                colors.secondary,
-                colors.arc_bg,
-            );
-            canvas.draw_text(disk_w_cx - 4, net_cy - 2, "\u{2191}", FONT_TINY, colors.dim);
+                let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 12;
+                Self::draw_activity_arc(canvas, disk_w_cx, net_cy, small_radius, small_stroke,
+                    data.net_tx_rate, io_max, colors.secondary, colors.arc_bg);
+                canvas.draw_text(disk_w_cx - 4, net_cy - 2, "\u{2191}", FONT_TINY, colors.dim);
+            }
 
             // Uptime and IP at bottom
             let bottom_y = height as i32 - margin - 14;
-            let uptime_text = format!("Up: {}", data.uptime);
-            canvas.draw_text(margin, bottom_y, &uptime_text, FONT_TINY, colors.dim);
+            if is_on(complications::UPTIME) {
+                let uptime_text = format!("Up: {}", data.uptime);
+                canvas.draw_text(margin, bottom_y, &uptime_text, FONT_TINY, colors.dim);
+            }
 
-            if let Some(ref ip) = data.display_ip {
-                let ip_width = canvas.text_width(ip, FONT_TINY);
-                canvas.draw_text(
-                    width as i32 - margin - ip_width,
-                    bottom_y,
-                    ip,
-                    FONT_TINY,
-                    colors.dim,
-                );
+            if is_on(complications::IP_ADDRESS) {
+                if let Some(ref ip) = data.display_ip {
+                    let ip_width = canvas.text_width(ip, FONT_TINY);
+                    canvas.draw_text(width as i32 - margin - ip_width, bottom_y, ip, FONT_TINY, colors.dim);
+                }
             }
         }
     }

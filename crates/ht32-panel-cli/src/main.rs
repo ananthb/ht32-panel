@@ -67,6 +67,11 @@ enum Commands {
         #[command(subcommand)]
         action: NetworkCommands,
     },
+    /// Face complications settings
+    Complication {
+        #[command(subcommand)]
+        action: ComplicationCommands,
+    },
     /// Save a screenshot of the display
     Screenshot {
         /// Output file path (default: screenshot.png)
@@ -162,6 +167,22 @@ enum NetworkCommands {
     List,
 }
 
+#[derive(Subcommand)]
+enum ComplicationCommands {
+    /// List available complications for the current face
+    List,
+    /// Enable a complication
+    Enable {
+        /// Complication ID (e.g., network, disk_io, cpu_temp)
+        id: String,
+    },
+    /// Disable a complication
+    Disable {
+        /// Complication ID (e.g., network, disk_io, cpu_temp)
+        id: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -184,6 +205,7 @@ async fn main() -> Result<()> {
         Commands::Led { action } => handle_led(action, &client).await,
         Commands::Theme { action } => handle_theme(action, &client).await,
         Commands::Network { action } => handle_network(action, &client).await,
+        Commands::Complication { action } => handle_complication(action, &client).await,
         Commands::Screenshot { output } => handle_screenshot(&output, &client).await,
         Commands::Daemon { action } => handle_daemon(action, &client).await,
     }
@@ -351,6 +373,35 @@ async fn handle_network(action: NetworkCommands, client: &DaemonClient) -> Resul
             for iface in interfaces {
                 println!("  {}", iface);
             }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_complication(action: ComplicationCommands, client: &DaemonClient) -> Result<()> {
+    match action {
+        ComplicationCommands::List => {
+            let face = client.get_face().await?;
+            let complications = client.list_complications().await?;
+            println!("Complications for '{}' face:", face);
+            if complications.is_empty() {
+                println!("  (none available)");
+            } else {
+                for (id, name, description, enabled) in complications {
+                    let status = if enabled { "[x]" } else { "[ ]" };
+                    println!("  {} {} - {}", status, id, name);
+                    println!("      {}", description);
+                }
+            }
+        }
+        ComplicationCommands::Enable { id } => {
+            client.enable_complication(&id).await?;
+            println!("Enabled complication: {}", id);
+        }
+        ComplicationCommands::Disable { id } => {
+            client.disable_complication(&id).await?;
+            println!("Disabled complication: {}", id);
         }
     }
 

@@ -63,9 +63,17 @@
 
         <div class="card">
             <h2>Display Face</h2>
-            <div id="face-controls" hx-get="/face" hx-trigger="load" hx-swap="innerHTML">
+            <div id="face-controls" hx-get="/face" hx-trigger="load" hx-swap="innerHTML"
+                 hx-on::after-settle="htmx.trigger('#complications-controls', 'reload')">
                 Loading...
             </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Complications</h2>
+        <div id="complications-controls" hx-get="/complications" hx-trigger="load, reload" hx-swap="innerHTML">
+            Loading...
         </div>
     </div>
 

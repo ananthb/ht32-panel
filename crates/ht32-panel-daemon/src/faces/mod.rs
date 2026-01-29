@@ -1,6 +1,8 @@
 //! Face system for pre-configured layouts.
 //!
 //! Faces display system information in different styles and colours.
+//! Each face supports configurable complications that allow users to
+//! enable or disable specific display elements.
 
 #![allow(dead_code)]
 
@@ -16,6 +18,8 @@ pub use professional::ProfessionalFace;
 
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 /// Color theme for face rendering.
 #[derive(Debug, Clone, Copy)]
@@ -98,13 +102,126 @@ pub fn available_themes() -> Vec<&'static str> {
     ]
 }
 
+/// A complication is an optional display element that can be enabled or disabled.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct Complication {
+    /// Unique identifier for this complication.
+    pub id: String,
+    /// Human-readable name.
+    pub name: String,
+    /// Description of what this complication shows.
+    pub description: String,
+    /// Whether this complication is enabled by default.
+    pub default_enabled: bool,
+}
+
+impl Complication {
+    /// Creates a new complication.
+    pub fn new(id: &str, name: &str, description: &str, default_enabled: bool) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: description.to_string(),
+            default_enabled,
+        }
+    }
+}
+
+/// Standard complication IDs used across faces.
+pub mod complications {
+    pub const NETWORK: &str = "network";
+    pub const DISK_IO: &str = "disk_io";
+    pub const CPU_TEMP: &str = "cpu_temp";
+    pub const IP_ADDRESS: &str = "ip_address";
+    pub const UPTIME: &str = "uptime";
+    pub const HOSTNAME: &str = "hostname";
+    pub const TIME: &str = "time";
+    pub const CPU: &str = "cpu";
+    pub const RAM: &str = "ram";
+}
+
+/// Set of enabled complications for rendering.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct EnabledComplications {
+    /// Map of face name to set of enabled complication IDs.
+    #[serde(default)]
+    face_complications: HashMap<String, HashSet<String>>,
+}
+
+impl EnabledComplications {
+    /// Creates a new empty set.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Checks if a complication is enabled for a face.
+    /// If the face has no explicit settings, returns the complication's default.
+    pub fn is_enabled(&self, face: &str, complication_id: &str, default: bool) -> bool {
+        if let Some(enabled) = self.face_complications.get(face) {
+            enabled.contains(complication_id)
+        } else {
+            default
+        }
+    }
+
+    /// Sets whether a complication is enabled for a face.
+    pub fn set_enabled(&mut self, face: &str, complication_id: &str, enabled: bool) {
+        let face_set = self
+            .face_complications
+            .entry(face.to_string())
+            .or_default();
+        if enabled {
+            face_set.insert(complication_id.to_string());
+        } else {
+            face_set.remove(complication_id);
+        }
+    }
+
+    /// Initializes complications for a face from its defaults.
+    pub fn init_from_defaults(&mut self, face: &dyn Face) {
+        let face_name = face.name();
+        if !self.face_complications.contains_key(face_name) {
+            let mut enabled = HashSet::new();
+            for comp in face.available_complications() {
+                if comp.default_enabled {
+                    enabled.insert(comp.id.clone());
+                }
+            }
+            self.face_complications.insert(face_name.to_string(), enabled);
+        }
+    }
+
+    /// Gets all enabled complication IDs for a face.
+    pub fn get_enabled(&self, face: &str) -> HashSet<String> {
+        self.face_complications
+            .get(face)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Sets all enabled complications for a face at once.
+    pub fn set_all(&mut self, face: &str, enabled: HashSet<String>) {
+        self.face_complications.insert(face.to_string(), enabled);
+    }
+}
+
 /// Trait for display faces.
 pub trait Face: Send + Sync {
     /// Returns the name of the face.
     fn name(&self) -> &str;
 
-    /// Renders the face onto the canvas using current system data and theme.
-    fn render(&self, canvas: &mut Canvas, data: &SystemData, theme: &Theme);
+    /// Returns the list of available complications for this face.
+    fn available_complications(&self) -> Vec<Complication>;
+
+    /// Renders the face onto the canvas using current system data, theme,
+    /// and enabled complications.
+    fn render(
+        &self,
+        canvas: &mut Canvas,
+        data: &SystemData,
+        theme: &Theme,
+        complications: &EnabledComplications,
+    );
 }
 
 /// Creates a face by name.
@@ -121,4 +238,11 @@ pub fn create_face(name: &str) -> Option<Box<dyn Face>> {
 /// Returns a list of available face names.
 pub fn available_faces() -> Vec<&'static str> {
     vec!["arcs", "ascii", "digits", "professional"]
+}
+
+/// Returns available complications for a face by name.
+pub fn face_complications(name: &str) -> Vec<Complication> {
+    create_face(name)
+        .map(|f| f.available_complications())
+        .unwrap_or_default()
 }

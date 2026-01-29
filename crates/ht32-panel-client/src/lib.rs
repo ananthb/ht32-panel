@@ -73,6 +73,19 @@ trait Daemon1 {
     /// Lists all available network interfaces.
     fn list_network_interfaces(&self) -> zbus::Result<Vec<String>>;
 
+    /// Lists available complications for the current face.
+    /// Returns (id, name, description, enabled) tuples.
+    fn list_complications(&self) -> zbus::Result<Vec<(String, String, String, bool)>>;
+
+    /// Gets enabled complications for the current face.
+    fn get_enabled_complications(&self) -> zbus::Result<Vec<String>>;
+
+    /// Enables a complication for the current face.
+    fn enable_complication(&self, complication_id: &str) -> zbus::Result<()>;
+
+    /// Disables a complication for the current face.
+    fn disable_complication(&self, complication_id: &str) -> zbus::Result<()>;
+
     /// Returns the current framebuffer as PNG data.
     fn get_screen_png(&self) -> zbus::Result<Vec<u8>>;
 
@@ -326,5 +339,38 @@ impl DaemonClient {
             .web_enabled()
             .await
             .context("Failed to get web enabled status via D-Bus")
+    }
+
+    /// Lists complications for the current face.
+    /// Returns (id, name, description, enabled) tuples.
+    pub async fn list_complications(&self) -> Result<Vec<(String, String, String, bool)>> {
+        self.proxy
+            .list_complications()
+            .await
+            .context("Failed to list complications via D-Bus")
+    }
+
+    /// Gets enabled complications for the current face.
+    pub async fn get_enabled_complications(&self) -> Result<Vec<String>> {
+        self.proxy
+            .get_enabled_complications()
+            .await
+            .context("Failed to get enabled complications via D-Bus")
+    }
+
+    /// Enables a complication for the current face.
+    pub async fn enable_complication(&self, complication_id: &str) -> Result<()> {
+        self.proxy
+            .enable_complication(complication_id)
+            .await
+            .context("Failed to enable complication via D-Bus")
+    }
+
+    /// Disables a complication for the current face.
+    pub async fn disable_complication(&self, complication_id: &str) -> Result<()> {
+        self.proxy
+            .disable_complication(complication_id)
+            .await
+            .context("Failed to disable complication via D-Bus")
     }
 }

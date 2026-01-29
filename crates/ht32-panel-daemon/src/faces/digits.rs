@@ -3,7 +3,7 @@
 //! Features a retro LCD aesthetic with large time display and
 //! segmented areas for system metrics.
 
-use super::{Face, Theme};
+use super::{complications, Complication, EnabledComplications, Face, Theme};
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
 
@@ -91,178 +91,144 @@ impl Face for DigitsFace {
         "digits"
     }
 
-    fn render(&self, canvas: &mut Canvas, data: &SystemData, theme: &Theme) {
+    fn available_complications(&self) -> Vec<Complication> {
+        vec![
+            Complication::new(complications::TIME, "Time", "Display the current time", true),
+            Complication::new(complications::HOSTNAME, "Hostname", "Display the system hostname", true),
+            Complication::new(complications::UPTIME, "Uptime", "Display system uptime", true),
+            Complication::new(complications::IP_ADDRESS, "IP Address", "Display network IP address", true),
+            Complication::new(complications::CPU, "CPU", "Display CPU usage", true),
+            Complication::new(complications::CPU_TEMP, "CPU Temperature", "Display CPU temperature", true),
+            Complication::new(complications::RAM, "RAM", "Display RAM usage", true),
+            Complication::new(complications::DISK_IO, "Disk I/O", "Display disk read/write rates", true),
+            Complication::new(complications::NETWORK, "Network", "Display network up/down rates", true),
+        ]
+    }
+
+    fn render(
+        &self,
+        canvas: &mut Canvas,
+        data: &SystemData,
+        theme: &Theme,
+        comp: &EnabledComplications,
+    ) {
         let colors = FaceColors::from_theme(theme);
         let (width, _height) = canvas.dimensions();
         let portrait = width < 200;
         let margin = 6;
         let mut y = margin;
 
+        let is_on = |id: &str| comp.is_enabled(self.name(), id, true);
+
         if portrait {
-            // Portrait layout - stacked vertically
-            // Large time at top
-            let time_width = canvas.text_width(&data.time, FONT_TIME);
-            let time_x = (width as i32 - time_width) / 2;
-            canvas.draw_text(time_x, y, &data.time, FONT_TIME, colors.segment_on);
-            y += canvas.line_height(FONT_TIME) + 2;
+            // Portrait layout
+            if is_on(complications::TIME) {
+                let time_width = canvas.text_width(&data.time, FONT_TIME);
+                let time_x = (width as i32 - time_width) / 2;
+                canvas.draw_text(time_x, y, &data.time, FONT_TIME, colors.segment_on);
+                y += canvas.line_height(FONT_TIME) + 2;
+            }
 
-            // Hostname below time
-            let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
-            let host_x = (width as i32 - host_width) / 2;
-            canvas.draw_text(host_x, y, &data.hostname, FONT_SMALL, colors.label);
-            y += canvas.line_height(FONT_SMALL) + 4;
+            if is_on(complications::HOSTNAME) {
+                let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
+                let host_x = (width as i32 - host_width) / 2;
+                canvas.draw_text(host_x, y, &data.hostname, FONT_SMALL, colors.label);
+                y += canvas.line_height(FONT_SMALL) + 4;
+            }
 
-            Self::draw_divider(canvas, y, width, margin, colors.divider);
-            y += 6;
-
-            // CPU and RAM side by side
             let col_width = (width as i32 - margin * 3) / 2;
-            Self::draw_segment_value(
-                canvas,
-                margin,
-                y,
-                "CPU",
-                &format!("{:2.0}%", data.cpu_percent),
-                colors.label,
-                colors.segment_on,
-            );
-            Self::draw_segment_value(
-                canvas,
-                margin + col_width + margin,
-                y,
-                "RAM",
-                &format!("{:2.0}%", data.ram_percent),
-                colors.label,
-                colors.segment_on,
-            );
-            y += 32;
 
-            Self::draw_divider(canvas, y, width, margin, colors.divider);
-            y += 6;
+            if is_on(complications::CPU) || is_on(complications::RAM) {
+                Self::draw_divider(canvas, y, width, margin, colors.divider);
+                y += 6;
 
-            // Disk I/O
-            let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
-            let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
-            Self::draw_segment_value(
-                canvas,
-                margin,
-                y,
-                "DSK R",
-                &disk_r,
-                colors.label,
-                colors.segment_on,
-            );
-            Self::draw_segment_value(
-                canvas,
-                margin + col_width + margin,
-                y,
-                "DSK W",
-                &disk_w,
-                colors.label,
-                colors.segment_on,
-            );
-            y += 32;
+                if is_on(complications::CPU) {
+                    Self::draw_segment_value(canvas, margin, y, "CPU",
+                        &format!("{:2.0}%", data.cpu_percent), colors.label, colors.segment_on);
+                }
+                if is_on(complications::RAM) {
+                    Self::draw_segment_value(canvas, margin + col_width + margin, y, "RAM",
+                        &format!("{:2.0}%", data.ram_percent), colors.label, colors.segment_on);
+                }
+                y += 32;
+            }
 
-            // Network I/O
-            let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
-            let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
-            Self::draw_segment_value(
-                canvas,
-                margin,
-                y,
-                "NET \u{2193}",
-                &net_rx,
-                colors.label,
-                colors.segment_on,
-            );
-            Self::draw_segment_value(
-                canvas,
-                margin + col_width + margin,
-                y,
-                "NET \u{2191}",
-                &net_tx,
-                colors.label,
-                colors.segment_on,
-            );
-            y += 32;
+            if is_on(complications::DISK_IO) {
+                Self::draw_divider(canvas, y, width, margin, colors.divider);
+                y += 6;
+                let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
+                let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
+                Self::draw_segment_value(canvas, margin, y, "DSK R", &disk_r, colors.label, colors.segment_on);
+                Self::draw_segment_value(canvas, margin + col_width + margin, y, "DSK W", &disk_w, colors.label, colors.segment_on);
+                y += 32;
+            }
 
-            Self::draw_divider(canvas, y, width, margin, colors.divider);
-            y += 6;
+            if is_on(complications::NETWORK) {
+                let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
+                let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
+                Self::draw_segment_value(canvas, margin, y, "NET \u{2193}", &net_rx, colors.label, colors.segment_on);
+                Self::draw_segment_value(canvas, margin + col_width + margin, y, "NET \u{2191}", &net_tx, colors.label, colors.segment_on);
+                y += 32;
+            }
 
-            // Uptime and IP at bottom
-            canvas.draw_text(margin, y, &format!("UP {}", data.uptime), FONT_SMALL, colors.label);
-            y += canvas.line_height(FONT_SMALL) + 2;
+            if is_on(complications::UPTIME) || is_on(complications::IP_ADDRESS) {
+                Self::draw_divider(canvas, y, width, margin, colors.divider);
+                y += 6;
+            }
 
-            if let Some(ref ip) = data.display_ip {
-                // Truncate if too long
-                let max_chars = if width < 150 { 20 } else { 30 };
-                let ip_display = if ip.len() > max_chars {
-                    format!("{}...", &ip[..max_chars - 3])
-                } else {
-                    ip.clone()
-                };
-                canvas.draw_text(margin, y, &ip_display, FONT_SMALL, colors.label);
+            if is_on(complications::UPTIME) {
+                canvas.draw_text(margin, y, &format!("UP {}", data.uptime), FONT_SMALL, colors.label);
+                y += canvas.line_height(FONT_SMALL) + 2;
+            }
+
+            if is_on(complications::IP_ADDRESS) {
+                if let Some(ref ip) = data.display_ip {
+                    let max_chars = if width < 150 { 20 } else { 30 };
+                    let ip_display = if ip.len() > max_chars {
+                        format!("{}...", &ip[..max_chars - 3])
+                    } else {
+                        ip.clone()
+                    };
+                    canvas.draw_text(margin, y, &ip_display, FONT_SMALL, colors.label);
+                }
             }
         } else {
-            // Landscape layout - more horizontal space
-            // Large time on left, hostname on right
-            canvas.draw_text(margin, y, &data.time, FONT_TIME, colors.segment_on);
-            let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
-            canvas.draw_text(
-                width as i32 - margin - host_width,
-                y + 8,
-                &data.hostname,
-                FONT_SMALL,
-                colors.label,
-            );
-
-            // Uptime below hostname
-            let uptime_text = format!("UP {}", data.uptime);
-            let uptime_width = canvas.text_width(&uptime_text, FONT_SMALL);
-            canvas.draw_text(
-                width as i32 - margin - uptime_width,
-                y + 22,
-                &uptime_text,
-                FONT_SMALL,
-                colors.label,
-            );
-            y += canvas.line_height(FONT_TIME) + 6;
+            // Landscape layout
+            if is_on(complications::TIME) {
+                canvas.draw_text(margin, y, &data.time, FONT_TIME, colors.segment_on);
+            }
+            if is_on(complications::HOSTNAME) {
+                let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
+                canvas.draw_text(width as i32 - margin - host_width, y + 8, &data.hostname, FONT_SMALL, colors.label);
+            }
+            if is_on(complications::UPTIME) {
+                let uptime_text = format!("UP {}", data.uptime);
+                let uptime_width = canvas.text_width(&uptime_text, FONT_SMALL);
+                canvas.draw_text(width as i32 - margin - uptime_width, y + 22, &uptime_text, FONT_SMALL, colors.label);
+            }
+            if is_on(complications::TIME) || is_on(complications::HOSTNAME) {
+                y += canvas.line_height(FONT_TIME) + 6;
+            }
 
             Self::draw_divider(canvas, y, width, margin, colors.divider);
             y += 8;
 
-            // Four columns: CPU, RAM, TEMP, IP
             let col_width = (width as i32 - margin * 5) / 4;
 
-            // Row 1: CPU, RAM, Temp (if available), empty or IP
-            Self::draw_segment_value(
-                canvas,
-                margin,
-                y,
-                "CPU",
-                &format!("{:2.0}%", data.cpu_percent),
-                colors.label,
-                colors.segment_on,
-            );
-            Self::draw_segment_value(
-                canvas,
-                margin + col_width + margin,
-                y,
-                "RAM",
-                &format!("{:2.0}%", data.ram_percent),
-                colors.label,
-                colors.segment_on,
-            );
-            if let Some(temp) = data.cpu_temp {
-                Self::draw_segment_value(
-                    canvas,
-                    margin + (col_width + margin) * 2,
-                    y,
-                    "TEMP",
-                    &format!("{:.0}°", temp),
-                    colors.label,
-                    colors.segment_on,
-                );
+            // Row 1: CPU, RAM, Temp
+            if is_on(complications::CPU) {
+                Self::draw_segment_value(canvas, margin, y, "CPU",
+                    &format!("{:2.0}%", data.cpu_percent), colors.label, colors.segment_on);
+            }
+            if is_on(complications::RAM) {
+                Self::draw_segment_value(canvas, margin + col_width + margin, y, "RAM",
+                    &format!("{:2.0}%", data.ram_percent), colors.label, colors.segment_on);
+            }
+            if is_on(complications::CPU_TEMP) {
+                if let Some(temp) = data.cpu_temp {
+                    Self::draw_segment_value(canvas, margin + (col_width + margin) * 2, y, "TEMP",
+                        &format!("{:.0}°", temp), colors.label, colors.segment_on);
+                }
             }
             y += 34;
 
@@ -270,56 +236,29 @@ impl Face for DigitsFace {
             y += 8;
 
             // Row 2: Disk R, Disk W, Net Down, Net Up
-            let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
-            let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
-            let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
-            let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
-
-            Self::draw_segment_value(
-                canvas,
-                margin,
-                y,
-                "DSK R",
-                &disk_r,
-                colors.label,
-                colors.segment_on,
-            );
-            Self::draw_segment_value(
-                canvas,
-                margin + col_width + margin,
-                y,
-                "DSK W",
-                &disk_w,
-                colors.label,
-                colors.segment_on,
-            );
-            Self::draw_segment_value(
-                canvas,
-                margin + (col_width + margin) * 2,
-                y,
-                "NET \u{2193}",
-                &net_rx,
-                colors.label,
-                colors.segment_on,
-            );
-            Self::draw_segment_value(
-                canvas,
-                margin + (col_width + margin) * 3,
-                y,
-                "NET \u{2191}",
-                &net_tx,
-                colors.label,
-                colors.segment_on,
-            );
+            if is_on(complications::DISK_IO) {
+                let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
+                let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
+                Self::draw_segment_value(canvas, margin, y, "DSK R", &disk_r, colors.label, colors.segment_on);
+                Self::draw_segment_value(canvas, margin + col_width + margin, y, "DSK W", &disk_w, colors.label, colors.segment_on);
+            }
+            if is_on(complications::NETWORK) {
+                let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
+                let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
+                Self::draw_segment_value(canvas, margin + (col_width + margin) * 2, y, "NET \u{2193}", &net_rx, colors.label, colors.segment_on);
+                Self::draw_segment_value(canvas, margin + (col_width + margin) * 3, y, "NET \u{2191}", &net_tx, colors.label, colors.segment_on);
+            }
             y += 34;
 
             Self::draw_divider(canvas, y, width, margin, colors.divider);
             y += 6;
 
-            // IP at bottom
-            if let Some(ref ip) = data.display_ip {
-                canvas.draw_text(margin, y, ip, FONT_SMALL, colors.label);
+            if is_on(complications::IP_ADDRESS) {
+                if let Some(ref ip) = data.display_ip {
+                    canvas.draw_text(margin, y, ip, FONT_SMALL, colors.label);
+                }
             }
         }
+        let _ = y;
     }
 }

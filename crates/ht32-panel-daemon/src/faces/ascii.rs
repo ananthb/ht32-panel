@@ -13,7 +13,7 @@
 //! enp2s0: 192.168.1.100
 //! ```
 
-use super::{Face, Theme};
+use super::{complications, Complication, EnabledComplications, Face, Theme};
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
 
@@ -100,207 +100,187 @@ impl Face for AsciiFace {
         "ascii"
     }
 
-    fn render(&self, canvas: &mut Canvas, data: &SystemData, theme: &Theme) {
+    fn available_complications(&self) -> Vec<Complication> {
+        vec![
+            Complication::new(complications::HOSTNAME, "Hostname", "Display the system hostname", true),
+            Complication::new(complications::TIME, "Time", "Display the current time", true),
+            Complication::new(complications::UPTIME, "Uptime", "Display system uptime", true),
+            Complication::new(complications::IP_ADDRESS, "IP Address", "Display network IP address", true),
+            Complication::new(complications::CPU, "CPU", "Display CPU usage", true),
+            Complication::new(complications::CPU_TEMP, "CPU Temperature", "Display CPU temperature", true),
+            Complication::new(complications::RAM, "RAM", "Display RAM usage", true),
+            Complication::new(complications::DISK_IO, "Disk I/O", "Display disk activity graph", true),
+            Complication::new(complications::NETWORK, "Network", "Display network activity graph", true),
+        ]
+    }
+
+    fn render(
+        &self,
+        canvas: &mut Canvas,
+        data: &SystemData,
+        theme: &Theme,
+        complications: &EnabledComplications,
+    ) {
         let colors = FaceColors::from_theme(theme);
         let (width, _height) = canvas.dimensions();
         let portrait = width < 200;
         let margin = 8;
         let mut y = margin;
-
-        // Bar width in characters
         let bar_chars = if portrait { 10 } else { 16 };
 
+        let is_enabled = |id: &str, default: bool| complications.is_enabled(self.name(), id, default);
+
         if portrait {
-            // Portrait layout - stack vertically
-            // Hostname on left, time on top right
-            canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
-            let time_width = canvas.text_width(&data.time, FONT_LARGE);
-            canvas.draw_text(
-                width as i32 - margin - time_width,
-                y,
-                &data.time,
-                FONT_LARGE,
-                colors.text,
-            );
-            y += canvas.line_height(FONT_LARGE) + 2;
+            // Portrait layout
+            if is_enabled(complications::HOSTNAME, true) {
+                canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
+            }
+            if is_enabled(complications::TIME, true) {
+                let time_width = canvas.text_width(&data.time, FONT_LARGE);
+                canvas.draw_text(width as i32 - margin - time_width, y, &data.time, FONT_LARGE, colors.text);
+            }
+            if is_enabled(complications::HOSTNAME, true) || is_enabled(complications::TIME, true) {
+                y += canvas.line_height(FONT_LARGE) + 2;
+            }
 
-            // Uptime
-            let uptime_text = format!("Up: {}", data.uptime);
-            canvas.draw_text(margin, y, &uptime_text, FONT_SMALL, colors.dim);
-            y += canvas.line_height(FONT_SMALL) + 2;
+            if is_enabled(complications::UPTIME, true) {
+                let uptime_text = format!("Up: {}", data.uptime);
+                canvas.draw_text(margin, y, &uptime_text, FONT_SMALL, colors.dim);
+                y += canvas.line_height(FONT_SMALL) + 2;
+            }
 
-            // IP address under uptime (hyphenate IPv6 if too long)
-            if let Some(ref ip) = data.display_ip {
-                let max_width = width as i32 - margin * 2;
-                let ip_width = canvas.text_width(ip, FONT_SMALL);
-                if ip_width > max_width && ip.contains(':') {
-                    // IPv6 address - split at a colon near the middle
-                    let mid = ip.len() / 2;
-                    let split_pos = ip[..mid].rfind(':').map(|p| p + 1).unwrap_or(mid);
-                    let (first, second) = ip.split_at(split_pos);
-                    canvas.draw_text(margin, y, first, FONT_SMALL, colors.dim);
-                    y += canvas.line_height(FONT_SMALL);
-                    canvas.draw_text(margin, y, second, FONT_SMALL, colors.dim);
-                    y += canvas.line_height(FONT_SMALL) + 2;
-                } else {
-                    canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
-                    y += canvas.line_height(FONT_SMALL) + 2;
+            if is_enabled(complications::IP_ADDRESS, true) {
+                if let Some(ref ip) = data.display_ip {
+                    let max_width = width as i32 - margin * 2;
+                    let ip_width = canvas.text_width(ip, FONT_SMALL);
+                    if ip_width > max_width && ip.contains(':') {
+                        let mid = ip.len() / 2;
+                        let split_pos = ip[..mid].rfind(':').map(|p| p + 1).unwrap_or(mid);
+                        let (first, second) = ip.split_at(split_pos);
+                        canvas.draw_text(margin, y, first, FONT_SMALL, colors.dim);
+                        y += canvas.line_height(FONT_SMALL);
+                        canvas.draw_text(margin, y, second, FONT_SMALL, colors.dim);
+                        y += canvas.line_height(FONT_SMALL) + 2;
+                    } else {
+                        canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
+                        y += canvas.line_height(FONT_SMALL) + 2;
+                    }
                 }
             }
 
-            // CPU temperature (portrait: below IP)
-            if let Some(temp) = data.cpu_temp {
-                let temp_text = format!("Temp: {:.0}°C", temp);
-                canvas.draw_text(margin, y, &temp_text, FONT_SMALL, colors.dim);
+            if is_enabled(complications::CPU_TEMP, true) {
+                if let Some(temp) = data.cpu_temp {
+                    let temp_text = format!("Temp: {:.0}°C", temp);
+                    canvas.draw_text(margin, y, &temp_text, FONT_SMALL, colors.dim);
+                    y += canvas.line_height(FONT_SMALL) + 4;
+                } else {
+                    y += 4;
+                }
+            }
+
+            if is_enabled(complications::CPU, true) {
+                let cpu_bar = ascii_bar(data.cpu_percent, bar_chars);
+                let cpu_text = format!("CPU {} {:2.0}%", cpu_bar, data.cpu_percent);
+                canvas.draw_text(margin, y, &cpu_text, FONT_SMALL, colors.text);
+                y += canvas.line_height(FONT_SMALL) + 2;
+            }
+
+            if is_enabled(complications::RAM, true) {
+                let ram_bar = ascii_bar(data.ram_percent, bar_chars);
+                let ram_text = format!("RAM {} {:2.0}%", ram_bar, data.ram_percent);
+                canvas.draw_text(margin, y, &ram_text, FONT_SMALL, colors.text);
                 y += canvas.line_height(FONT_SMALL) + 4;
-            } else {
-                y += 4; // Keep spacing consistent
             }
 
-            // CPU with ASCII bar
-            let cpu_bar = ascii_bar(data.cpu_percent, bar_chars);
-            let cpu_text = format!("CPU {} {:2.0}%", cpu_bar, data.cpu_percent);
-            canvas.draw_text(margin, y, &cpu_text, FONT_SMALL, colors.text);
-            y += canvas.line_height(FONT_SMALL) + 2;
+            if is_enabled(complications::DISK_IO, true) {
+                let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
+                let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
+                canvas.draw_text(margin, y, &format!("DSK R:{} W:{}", disk_r, disk_w), FONT_SMALL, colors.text);
+                y += canvas.line_height(FONT_SMALL) + 1;
+                canvas.draw_graph(margin, y, width - (margin * 2) as u32, GRAPH_HEIGHT, &data.disk_history,
+                    SystemData::compute_graph_scale(&data.disk_history), colors.bar_disk, colors.bar_bg);
+                y += GRAPH_HEIGHT as i32 + 4;
+            }
 
-            // RAM with ASCII bar
-            let ram_bar = ascii_bar(data.ram_percent, bar_chars);
-            let ram_text = format!("RAM {} {:2.0}%", ram_bar, data.ram_percent);
-            canvas.draw_text(margin, y, &ram_text, FONT_SMALL, colors.text);
-            y += canvas.line_height(FONT_SMALL) + 4;
-
-            // Disk I/O graph - counters on left side
-            let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
-            let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
-            canvas.draw_text(
-                margin,
-                y,
-                &format!("DSK R:{} W:{}", disk_r, disk_w),
-                FONT_SMALL,
-                colors.text,
-            );
-            y += canvas.line_height(FONT_SMALL) + 1;
-            canvas.draw_graph(
-                margin,
-                y,
-                width - (margin * 2) as u32,
-                GRAPH_HEIGHT,
-                &data.disk_history,
-                SystemData::compute_graph_scale(&data.disk_history),
-                colors.bar_disk,
-                colors.bar_bg,
-            );
-            y += GRAPH_HEIGHT as i32 + 4;
-
-            // Network I/O graph - counters on left side
-            let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
-            let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
-            canvas.draw_text(
-                margin,
-                y,
-                &format!("NET D:{} U:{}", net_rx, net_tx),
-                FONT_SMALL,
-                colors.text,
-            );
-            y += canvas.line_height(FONT_SMALL) + 1;
-            canvas.draw_graph(
-                margin,
-                y,
-                width - (margin * 2) as u32,
-                GRAPH_HEIGHT,
-                &data.net_history,
-                SystemData::compute_graph_scale(&data.net_history),
-                colors.bar_net,
-                colors.bar_bg,
-            );
+            if is_enabled(complications::NETWORK, true) {
+                let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
+                let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
+                canvas.draw_text(margin, y, &format!("NET D:{} U:{}", net_rx, net_tx), FONT_SMALL, colors.text);
+                y += canvas.line_height(FONT_SMALL) + 1;
+                canvas.draw_graph(margin, y, width - (margin * 2) as u32, GRAPH_HEIGHT, &data.net_history,
+                    SystemData::compute_graph_scale(&data.net_history), colors.bar_net, colors.bar_bg);
+            }
         } else {
-            // Landscape layout - hostname on left, time on top right
-            canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
-            let time_width = canvas.text_width(&data.time, FONT_LARGE);
-            canvas.draw_text(
-                width as i32 - margin - time_width,
-                y,
-                &data.time,
-                FONT_LARGE,
-                colors.text,
-            );
-            y += canvas.line_height(FONT_LARGE) + 2;
-
-            // Uptime
-            let uptime_text = format!("Up: {}", data.uptime);
-            canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, colors.dim);
-            y += canvas.line_height(FONT_NORMAL) + 2;
-
-            // IP address on its own line under uptime
-            if let Some(ref ip) = data.display_ip {
-                canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
-                y += canvas.line_height(FONT_SMALL) + 6;
-            } else {
-                y += 6;
+            // Landscape layout
+            if is_enabled(complications::HOSTNAME, true) {
+                canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
+            }
+            if is_enabled(complications::TIME, true) {
+                let time_width = canvas.text_width(&data.time, FONT_LARGE);
+                canvas.draw_text(width as i32 - margin - time_width, y, &data.time, FONT_LARGE, colors.text);
+            }
+            if is_enabled(complications::HOSTNAME, true) || is_enabled(complications::TIME, true) {
+                y += canvas.line_height(FONT_LARGE) + 2;
             }
 
-            // CPU with ASCII bar and temperature
-            let cpu_bar = ascii_bar(data.cpu_percent, bar_chars);
-            let cpu_text = if let Some(temp) = data.cpu_temp {
-                format!("CPU {} {:3.0}%  {:.0}°C", cpu_bar, data.cpu_percent, temp)
-            } else {
-                format!("CPU {} {:3.0}%", cpu_bar, data.cpu_percent)
-            };
-            canvas.draw_text(margin, y, &cpu_text, FONT_NORMAL, colors.text);
-            y += canvas.line_height(FONT_NORMAL) + 2;
+            if is_enabled(complications::UPTIME, true) {
+                let uptime_text = format!("Up: {}", data.uptime);
+                canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, colors.dim);
+                y += canvas.line_height(FONT_NORMAL) + 2;
+            }
 
-            // RAM with ASCII bar
-            let ram_bar = ascii_bar(data.ram_percent, bar_chars);
-            let ram_text = format!("RAM {} {:3.0}%", ram_bar, data.ram_percent);
-            canvas.draw_text(margin, y, &ram_text, FONT_NORMAL, colors.text);
-            y += canvas.line_height(FONT_NORMAL) + 4;
+            if is_enabled(complications::IP_ADDRESS, true) {
+                if let Some(ref ip) = data.display_ip {
+                    canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
+                    y += canvas.line_height(FONT_SMALL) + 6;
+                } else {
+                    y += 6;
+                }
+            }
 
-            // Disk I/O graph
-            let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
-            let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
-            canvas.draw_text(margin, y, "DSK", FONT_NORMAL, colors.text);
-            canvas.draw_text(
-                margin + 40,
-                y,
-                &format!("R:{} W:{}", disk_r, disk_w),
-                FONT_NORMAL,
-                colors.dim,
-            );
-            y += canvas.line_height(FONT_NORMAL) + 1;
-            canvas.draw_graph(
-                margin,
-                y,
-                width - (margin * 2) as u32,
-                GRAPH_HEIGHT,
-                &data.disk_history,
-                SystemData::compute_graph_scale(&data.disk_history),
-                colors.bar_disk,
-                colors.bar_bg,
-            );
-            y += GRAPH_HEIGHT as i32 + 3;
+            if is_enabled(complications::CPU, true) {
+                let cpu_bar = ascii_bar(data.cpu_percent, bar_chars);
+                let cpu_text = if is_enabled(complications::CPU_TEMP, true) {
+                    if let Some(temp) = data.cpu_temp {
+                        format!("CPU {} {:3.0}%  {:.0}°C", cpu_bar, data.cpu_percent, temp)
+                    } else {
+                        format!("CPU {} {:3.0}%", cpu_bar, data.cpu_percent)
+                    }
+                } else {
+                    format!("CPU {} {:3.0}%", cpu_bar, data.cpu_percent)
+                };
+                canvas.draw_text(margin, y, &cpu_text, FONT_NORMAL, colors.text);
+                y += canvas.line_height(FONT_NORMAL) + 2;
+            }
 
-            // Network I/O graph
-            let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
-            let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
-            canvas.draw_text(margin, y, "NET", FONT_NORMAL, colors.text);
-            canvas.draw_text(
-                margin + 40,
-                y,
-                &format!("D:{} U:{}", net_rx, net_tx),
-                FONT_NORMAL,
-                colors.dim,
-            );
-            y += canvas.line_height(FONT_NORMAL) + 1;
-            canvas.draw_graph(
-                margin,
-                y,
-                width - (margin * 2) as u32,
-                GRAPH_HEIGHT,
-                &data.net_history,
-                SystemData::compute_graph_scale(&data.net_history),
-                colors.bar_net,
-                colors.bar_bg,
-            );
+            if is_enabled(complications::RAM, true) {
+                let ram_bar = ascii_bar(data.ram_percent, bar_chars);
+                let ram_text = format!("RAM {} {:3.0}%", ram_bar, data.ram_percent);
+                canvas.draw_text(margin, y, &ram_text, FONT_NORMAL, colors.text);
+                y += canvas.line_height(FONT_NORMAL) + 4;
+            }
+
+            if is_enabled(complications::DISK_IO, true) {
+                let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
+                let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
+                canvas.draw_text(margin, y, "DSK", FONT_NORMAL, colors.text);
+                canvas.draw_text(margin + 40, y, &format!("R:{} W:{}", disk_r, disk_w), FONT_NORMAL, colors.dim);
+                y += canvas.line_height(FONT_NORMAL) + 1;
+                canvas.draw_graph(margin, y, width - (margin * 2) as u32, GRAPH_HEIGHT, &data.disk_history,
+                    SystemData::compute_graph_scale(&data.disk_history), colors.bar_disk, colors.bar_bg);
+                y += GRAPH_HEIGHT as i32 + 3;
+            }
+
+            if is_enabled(complications::NETWORK, true) {
+                let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
+                let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
+                canvas.draw_text(margin, y, "NET", FONT_NORMAL, colors.text);
+                canvas.draw_text(margin + 40, y, &format!("D:{} U:{}", net_rx, net_tx), FONT_NORMAL, colors.dim);
+                y += canvas.line_height(FONT_NORMAL) + 1;
+                canvas.draw_graph(margin, y, width - (margin * 2) as u32, GRAPH_HEIGHT, &data.net_history,
+                    SystemData::compute_graph_scale(&data.net_history), colors.bar_net, colors.bar_bg);
+            }
         }
+        let _ = y;
     }
 }

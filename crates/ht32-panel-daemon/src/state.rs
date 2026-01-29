@@ -14,7 +14,7 @@ use std::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
 
 use crate::config::Config;
-use crate::faces::{self, Face, Theme};
+use crate::faces::{self, EnabledComplications, Face, Theme};
 use crate::rendering::Canvas;
 use crate::sensors::{
     data::{IpDisplayPreference, SystemData},
@@ -59,6 +59,10 @@ pub struct DisplaySettings {
     /// IP address display preference.
     #[serde(default = "default_ip_display")]
     pub ip_display: String,
+
+    /// Enabled complications per face.
+    #[serde(default)]
+    pub complications: EnabledComplications,
 }
 
 fn default_ip_display() -> String {
@@ -97,6 +101,7 @@ impl Default for DisplaySettings {
             refresh_interval_ms: default_refresh_interval(),
             network_interface: None,
             ip_display: default_ip_display(),
+            complications: EnabledComplications::new(),
         }
     }
 }
@@ -221,6 +226,9 @@ pub struct AppState {
 
     /// IP address display preference
     ip_display: RwLock<IpDisplayPreference>,
+
+    /// Enabled complications per face
+    complications: RwLock<EnabledComplications>,
 }
 
 impl AppState {
@@ -293,6 +301,10 @@ impl AppState {
             .parse()
             .unwrap_or(IpDisplayPreference::Ipv6Gua);
 
+        // Initialize complications from settings
+        let mut complications = settings.complications.clone();
+        complications.init_from_defaults(face.as_ref());
+
         Ok(Self {
             led_device_path: config.devices.led.clone(),
             led_theme: RwLock::new(settings.led_theme),
@@ -312,6 +324,7 @@ impl AppState {
             refresh_interval_ms: RwLock::new(settings.refresh_interval_ms),
             network_interface: RwLock::new(network_interface),
             ip_display: RwLock::new(ip_display),
+            complications: RwLock::new(complications),
         })
     }
 
@@ -338,6 +351,7 @@ impl AppState {
             refresh_interval_ms: *self.refresh_interval_ms.read().unwrap(),
             network_interface: self.network_interface.read().unwrap().clone(),
             ip_display: self.ip_display.read().unwrap().to_string(),
+            complications: self.complications.read().unwrap().clone(),
         };
 
         let settings_file = self.state_dir.join("display.toml");
@@ -491,10 +505,11 @@ impl AppState {
             // Get canvas and render face
             let mut canvas = self.canvas.write().unwrap();
             let face = self.face.read().unwrap();
+            let complications = self.complications.read().unwrap();
 
             // Clear and render face
             canvas.clear();
-            face.render(&mut canvas, &system_data, &theme);
+            face.render(&mut canvas, &system_data, &theme, &complications);
         }
 
         // Render canvas to framebuffer with orientation transformation
@@ -654,6 +669,11 @@ impl AppState {
     /// Sets the display face.
     pub fn set_face(&self, name: &str) -> Result<()> {
         if let Some(new_face) = faces::create_face(name) {
+            // Initialize complications from defaults for this face
+            {
+                let mut complications = self.complications.write().unwrap();
+                complications.init_from_defaults(new_face.as_ref());
+            }
             *self.face.write().unwrap() = new_face;
             self.save_display_settings();
             info!("Display face changed to: {}", name);
@@ -666,6 +686,47 @@ impl AppState {
     /// Gets the current face name.
     pub fn face_name(&self) -> String {
         self.face.read().unwrap().name().to_string()
+    }
+
+    /// Gets available complications for the current face.
+    pub fn available_complications(&self) -> Vec<faces::Complication> {
+        self.face.read().unwrap().available_complications()
+    }
+
+    /// Gets enabled complications for the current face.
+    pub fn enabled_complications(&self) -> std::collections::HashSet<String> {
+        let face_name = self.face.read().unwrap().name().to_string();
+        self.complications.read().unwrap().get_enabled(&face_name)
+    }
+
+    /// Sets whether a complication is enabled for the current face.
+    pub fn set_complication_enabled(&self, complication_id: &str, enabled: bool) -> Result<()> {
+        let face_name = self.face.read().unwrap().name().to_string();
+        let available: Vec<_> = self.face.read().unwrap().available_complications();
+
+        // Validate complication exists for this face
+        if !available.iter().any(|c| c.id == complication_id) {
+            return Err(anyhow::anyhow!(
+                "Unknown complication '{}' for face '{}'",
+                complication_id,
+                face_name
+            ));
+        }
+
+        self.complications
+            .write()
+            .unwrap()
+            .set_enabled(&face_name, complication_id, enabled);
+        self.save_display_settings();
+        self.request_redraw();
+
+        info!(
+            "Complication '{}' {} for face '{}'",
+            complication_id,
+            if enabled { "enabled" } else { "disabled" },
+            face_name
+        );
+        Ok(())
     }
 
     /// Gets the current theme name.

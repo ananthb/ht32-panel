@@ -343,6 +343,45 @@ impl Daemon1Interface {
     fn ip_display(&self) -> String {
         self.state.ip_display().to_string()
     }
+
+    /// Lists available complications for the current face.
+    /// Returns a list of (id, name, description, enabled) tuples.
+    fn list_complications(&self) -> Vec<(String, String, String, bool)> {
+        let available = self.state.available_complications();
+        let enabled = self.state.enabled_complications();
+        available
+            .into_iter()
+            .map(|c| {
+                let is_enabled = enabled.contains(&c.id);
+                (c.id, c.name, c.description, is_enabled)
+            })
+            .collect()
+    }
+
+    /// Gets enabled complications for the current face.
+    fn get_enabled_complications(&self) -> Vec<String> {
+        self.state.enabled_complications().into_iter().collect()
+    }
+
+    /// Enables a complication for the current face.
+    fn enable_complication(&self, complication_id: &str) -> zbus::fdo::Result<()> {
+        self.state
+            .set_complication_enabled(complication_id, true)
+            .map_err(|e| zbus::fdo::Error::InvalidArgs(e.to_string()))?;
+        let _ = self.signal_tx.send(DaemonSignals::DisplaySettingsChanged);
+        debug!("D-Bus: EnableComplication({})", complication_id);
+        Ok(())
+    }
+
+    /// Disables a complication for the current face.
+    fn disable_complication(&self, complication_id: &str) -> zbus::fdo::Result<()> {
+        self.state
+            .set_complication_enabled(complication_id, false)
+            .map_err(|e| zbus::fdo::Error::InvalidArgs(e.to_string()))?;
+        let _ = self.signal_tx.send(DaemonSignals::DisplaySettingsChanged);
+        debug!("D-Bus: DisableComplication({})", complication_id);
+        Ok(())
+    }
 }
 
 /// Connects to the appropriate D-Bus bus based on configuration.
