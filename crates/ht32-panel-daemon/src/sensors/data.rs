@@ -125,4 +125,38 @@ impl SystemData {
             format!("{:.0}B", bytes_per_sec)
         }
     }
+
+    /// Computes an appropriate max scale value for graphing I/O history.
+    ///
+    /// This provides auto-scaling so graphs remain useful at any rate.
+    /// The returned value is rounded up to a "nice" number to avoid
+    /// constant scale changes.
+    pub fn compute_graph_scale(history: &VecDeque<f64>) -> f64 {
+        const MIN_SCALE: f64 = 1_000_000.0; // 1 MB/s minimum
+
+        let max_val = history
+            .iter()
+            .copied()
+            .fold(0.0_f64, |a, b| a.max(b));
+
+        if max_val <= MIN_SCALE {
+            return MIN_SCALE;
+        }
+
+        // Round up to next power of 10, then snap to 1x, 2x, or 5x
+        let magnitude = 10_f64.powf(max_val.log10().floor());
+        let normalized = max_val / magnitude;
+
+        let multiplier = if normalized <= 1.0 {
+            1.0
+        } else if normalized <= 2.0 {
+            2.0
+        } else if normalized <= 5.0 {
+            5.0
+        } else {
+            10.0
+        };
+
+        (magnitude * multiplier).max(MIN_SCALE)
+    }
 }

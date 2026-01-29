@@ -80,9 +80,6 @@ const BAR_HEIGHT: u32 = 10;
 /// Graph dimensions.
 const GRAPH_HEIGHT: u32 = 16;
 
-/// Max I/O rate for graph scaling (10 MB/s)
-const MAX_IO_RATE: f64 = 10_000_000.0;
-
 /// A professional face with graphical progress bars.
 pub struct ProfessionalFace;
 
@@ -244,7 +241,7 @@ impl Face for ProfessionalFace {
                 width - (margin * 2) as u32,
                 GRAPH_HEIGHT,
                 &data.disk_history,
-                MAX_IO_RATE,
+                SystemData::compute_graph_scale(&data.disk_history),
                 colors.bar_disk,
                 colors.bar_bg,
             );
@@ -267,7 +264,7 @@ impl Face for ProfessionalFace {
                 width - (margin * 2) as u32,
                 GRAPH_HEIGHT,
                 &data.net_history,
-                MAX_IO_RATE,
+                SystemData::compute_graph_scale(&data.net_history),
                 colors.bar_net,
                 colors.bar_bg,
             );
@@ -372,7 +369,7 @@ impl Face for ProfessionalFace {
                 width - (margin * 2) as u32,
                 GRAPH_HEIGHT,
                 &data.disk_history,
-                MAX_IO_RATE,
+                SystemData::compute_graph_scale(&data.disk_history),
                 colors.bar_disk,
                 colors.bar_bg,
             );
@@ -396,7 +393,7 @@ impl Face for ProfessionalFace {
                 width - (margin * 2) as u32,
                 GRAPH_HEIGHT,
                 &data.net_history,
-                MAX_IO_RATE,
+                SystemData::compute_graph_scale(&data.net_history),
                 colors.bar_net,
                 colors.bar_bg,
             );

@@ -3,9 +3,22 @@
 use anyhow::Result;
 use ht32_panel_hw::lcd::framebuffer::{rgb888_to_rgb565, Framebuffer};
 use std::collections::VecDeque;
-use tiny_skia::{Color, Paint, Pixmap, Rect, Transform};
+use tiny_skia::{Color, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
 
 use super::text::TextRenderer;
+
+/// Brightens a color by the given factor.
+fn brighten_color(color: u32, factor: f32) -> u32 {
+    let r = ((color >> 16) & 0xFF) as f32;
+    let g = ((color >> 8) & 0xFF) as f32;
+    let b = (color & 0xFF) as f32;
+
+    let r = ((r * factor).min(255.0)) as u32;
+    let g = ((g * factor).min(255.0)) as u32;
+    let b = ((b * factor).min(255.0)) as u32;
+
+    (r << 16) | (g << 8) | b
+}
 
 /// Canvas for rendering.
 pub struct Canvas {
@@ -72,6 +85,83 @@ impl Canvas {
         }
     }
 
+    /// Draws a filled circle.
+    pub fn fill_circle(&mut self, cx: i32, cy: i32, radius: u32, color: u32) {
+        let r = ((color >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((color >> 8) & 0xFF) as f32 / 255.0;
+        let b = (color & 0xFF) as f32 / 255.0;
+
+        let mut paint = Paint::default();
+        paint.set_color(Color::from_rgba(r, g, b, 1.0).unwrap());
+        paint.anti_alias = true;
+
+        let mut pb = PathBuilder::new();
+        pb.push_circle(cx as f32, cy as f32, radius as f32);
+        if let Some(path) = pb.finish() {
+            self.pixmap
+                .fill_path(&path, &paint, tiny_skia::FillRule::Winding, Transform::identity(), None);
+        }
+    }
+
+    /// Draws an arc (unfilled, stroke only).
+    ///
+    /// # Arguments
+    /// * `cx`, `cy` - Center of the arc
+    /// * `radius` - Radius of the arc
+    /// * `start_angle` - Start angle in radians (0 = right, PI/2 = down)
+    /// * `end_angle` - End angle in radians
+    /// * `stroke_width` - Width of the arc stroke
+    /// * `color` - RGB888 color
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_arc(
+        &mut self,
+        cx: i32,
+        cy: i32,
+        radius: u32,
+        start_angle: f32,
+        end_angle: f32,
+        stroke_width: f32,
+        color: u32,
+    ) {
+        let r = ((color >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((color >> 8) & 0xFF) as f32 / 255.0;
+        let b = (color & 0xFF) as f32 / 255.0;
+
+        let mut paint = Paint::default();
+        paint.set_color(Color::from_rgba(r, g, b, 1.0).unwrap());
+        paint.anti_alias = true;
+
+        let stroke = Stroke {
+            width: stroke_width,
+            ..Default::default()
+        };
+
+        // Build arc path using line segments (tiny_skia doesn't have native arc)
+        let mut pb = PathBuilder::new();
+        let segments = 64;
+        let angle_span = end_angle - start_angle;
+        let cx_f = cx as f32;
+        let cy_f = cy as f32;
+        let radius_f = radius as f32;
+
+        for i in 0..=segments {
+            let t = i as f32 / segments as f32;
+            let angle = start_angle + t * angle_span;
+            let px = cx_f + radius_f * angle.cos();
+            let py = cy_f + radius_f * angle.sin();
+            if i == 0 {
+                pb.move_to(px, py);
+            } else {
+                pb.line_to(px, py);
+            }
+        }
+
+        if let Some(path) = pb.finish() {
+            self.pixmap
+                .stroke_path(&path, &paint, &stroke, Transform::identity(), None);
+        }
+    }
+
     /// Draws text at the specified position.
     ///
     /// # Arguments
@@ -125,6 +215,10 @@ impl Canvas {
             return;
         }
 
+        // Compute highlight colors for high values
+        let high_color = brighten_color(line_color, 1.4); // 95-99%: brighter
+        let max_color = 0xFFFFFF; // 100%: white
+
         let num_points = data.len();
         let bar_width = (width as f64 / num_points as f64).max(1.0);
 
@@ -136,13 +230,17 @@ impl Canvas {
             if bar_height > 0 {
                 let bar_x = x + (i as f64 * bar_width) as i32;
                 let bar_y = y + (height - bar_height) as i32;
-                self.fill_rect(
-                    bar_x,
-                    bar_y,
-                    bar_width.ceil() as u32,
-                    bar_height,
-                    line_color,
-                );
+
+                // Choose color based on how close to max
+                let color = if normalized >= 1.0 {
+                    max_color
+                } else if normalized >= 0.95 {
+                    high_color
+                } else {
+                    line_color
+                };
+
+                self.fill_rect(bar_x, bar_y, bar_width.ceil() as u32, bar_height, color);
             }
         }
     }

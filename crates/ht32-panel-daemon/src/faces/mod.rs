@@ -4,10 +4,14 @@
 
 #![allow(dead_code)]
 
+mod arcs;
 mod ascii;
+mod digits;
 mod professional;
 
+pub use arcs::ArcsFace;
 pub use ascii::AsciiFace;
+pub use digits::DigitsFace;
 pub use professional::ProfessionalFace;
 
 use crate::rendering::Canvas;
@@ -106,7 +110,9 @@ pub trait Face: Send + Sync {
 /// Creates a face by name.
 pub fn create_face(name: &str) -> Option<Box<dyn Face>> {
     match name.to_lowercase().as_str() {
+        "arcs" => Some(Box::new(ArcsFace::new())),
         "ascii" => Some(Box::new(AsciiFace::new())),
+        "digits" => Some(Box::new(DigitsFace::new())),
         "professional" => Some(Box::new(ProfessionalFace::new())),
         _ => None,
     }
@@ -114,5 +120,5 @@ pub fn create_face(name: &str) -> Option<Box<dyn Face>> {
 
 /// Returns a list of available face names.
 pub fn available_faces() -> Vec<&'static str> {
-    vec!["ascii", "professional"]
+    vec!["arcs", "ascii", "digits", "professional"]
 }
