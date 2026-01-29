@@ -2,7 +2,9 @@
 
 use crate::{Error, Result};
 use std::str::FromStr;
+use std::time::Duration;
 use tokio::io::AsyncWriteExt;
+use tokio::time::sleep;
 use tokio_serial::{DataBits, Parity, SerialPortBuilderExt, StopBits};
 use tracing::{debug, info};
 
@@ -11,6 +13,9 @@ const SIGNATURE_BYTE: u8 = 0xFA;
 
 /// LED baud rate.
 const BAUD_RATE: u32 = 10000;
+
+/// Delay between bytes in milliseconds (must write one byte at a time).
+const BYTE_DELAY_MS: u64 = 5;
 
 /// LED theme options.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -84,6 +89,7 @@ impl LedDevice {
     }
 
     /// Opens the serial port and sends data.
+    /// Writes bytes one at a time with delays, as required by the device.
     async fn send_packet(&self, packet: [u8; 5]) -> Result<()> {
         let mut port = tokio_serial::new(&self.port_path, BAUD_RATE)
             .data_bits(DataBits::Eight)
@@ -107,9 +113,16 @@ impl LedDevice {
 
         debug!("Sending LED packet to {}: {:02X?}", self.port_path, packet);
 
-        // Write all bytes at once, then flush
-        port.write_all(&packet).await?;
-        port.flush().await?;
+        // Write bytes one at a time with delays between each byte.
+        // The device requires this slow byte-by-byte protocol.
+        for (i, &byte) in packet.iter().enumerate() {
+            port.write_all(&[byte]).await?;
+            port.flush().await?;
+            // Delay after each byte except the last
+            if i < packet.len() - 1 {
+                sleep(Duration::from_millis(BYTE_DELAY_MS)).await;
+            }
+        }
 
         debug!("LED packet sent successfully");
         Ok(())
