@@ -8,11 +8,13 @@
 
 mod arcs;
 mod ascii;
+mod clock;
 mod digits;
 mod professional;
 
 pub use arcs::ArcsFace;
 pub use ascii::AsciiFace;
+pub use clock::ClockFace;
 pub use digits::DigitsFace;
 pub use professional::ProfessionalFace;
 
@@ -387,6 +389,7 @@ pub fn create_face(name: &str) -> Option<Box<dyn Face>> {
     match name.to_lowercase().as_str() {
         "arcs" => Some(Box::new(ArcsFace::new())),
         "ascii" => Some(Box::new(AsciiFace::new())),
+        "clock" => Some(Box::new(ClockFace::new())),
         "digits" => Some(Box::new(DigitsFace::new())),
         "professional" => Some(Box::new(ProfessionalFace::new())),
         _ => None,
@@ -395,7 +398,7 @@ pub fn create_face(name: &str) -> Option<Box<dyn Face>> {
 
 /// Returns a list of available face names.
 pub fn available_faces() -> Vec<&'static str> {
-    vec!["arcs", "ascii", "digits", "professional"]
+    vec!["arcs", "ascii", "clock", "digits", "professional"]
 }
 
 /// Returns available complications for a face by name.

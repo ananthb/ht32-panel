@@ -108,6 +108,39 @@ impl Canvas {
         }
     }
 
+    /// Draws a line between two points.
+    ///
+    /// # Arguments
+    /// * `x1`, `y1` - Start point
+    /// * `x2`, `y2` - End point
+    /// * `stroke_width` - Width of the line
+    /// * `color` - RGB888 color
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_line(&mut self, x1: i32, y1: i32, x2: i32, y2: i32, stroke_width: f32, color: u32) {
+        let r = ((color >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((color >> 8) & 0xFF) as f32 / 255.0;
+        let b = (color & 0xFF) as f32 / 255.0;
+
+        let mut paint = Paint::default();
+        paint.set_color(Color::from_rgba(r, g, b, 1.0).unwrap());
+        paint.anti_alias = true;
+
+        let stroke = Stroke {
+            width: stroke_width,
+            line_cap: tiny_skia::LineCap::Round,
+            ..Default::default()
+        };
+
+        let mut pb = PathBuilder::new();
+        pb.move_to(x1 as f32, y1 as f32);
+        pb.line_to(x2 as f32, y2 as f32);
+
+        if let Some(path) = pb.finish() {
+            self.pixmap
+                .stroke_path(&path, &paint, &stroke, Transform::identity(), None);
+        }
+    }
+
     /// Draws an arc (unfilled, stroke only).
     ///
     /// # Arguments

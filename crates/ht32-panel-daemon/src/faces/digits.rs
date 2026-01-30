@@ -52,6 +52,7 @@ impl FaceColors {
 /// Font sizes.
 const FONT_TIME: f32 = 32.0;
 const FONT_LARGE: f32 = 20.0;
+const FONT_MEDIUM: f32 = 14.0;
 const FONT_SMALL: f32 = 11.0;
 
 /// A Casio-inspired digital watch face.
@@ -228,18 +229,18 @@ impl Face for DigitsFace {
             // Complication: Date (centered, if not hidden)
             if is_on(complications::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
-                    let date_width = canvas.text_width(&date_str, FONT_SMALL);
+                    let date_width = canvas.text_width(&date_str, FONT_MEDIUM);
                     let date_x = (width as i32 - date_width) / 2;
-                    canvas.draw_text(date_x, y, &date_str, FONT_SMALL, colors.label);
-                    y += canvas.line_height(FONT_SMALL) + 2;
+                    canvas.draw_text(date_x, y, &date_str, FONT_MEDIUM, colors.label);
+                    y += canvas.line_height(FONT_MEDIUM) + 2;
                 }
             }
 
             // Base element: Hostname (always shown)
-            let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
+            let host_width = canvas.text_width(&data.hostname, FONT_MEDIUM);
             let host_x = (width as i32 - host_width) / 2;
-            canvas.draw_text(host_x, y, &data.hostname, FONT_SMALL, colors.label);
-            y += canvas.line_height(FONT_SMALL) + 4;
+            canvas.draw_text(host_x, y, &data.hostname, FONT_MEDIUM, colors.label);
+            y += canvas.line_height(FONT_MEDIUM) + 4;
 
             let col_width = (width as i32 - margin * 3) / 2;
 
@@ -341,7 +342,7 @@ impl Face for DigitsFace {
                     } else {
                         ip.clone()
                     };
-                    canvas.draw_text(margin, y, &ip_display, FONT_SMALL, colors.label);
+                    canvas.draw_text(margin, y, &ip_display, FONT_MEDIUM, colors.label);
                 }
             }
         } else {
@@ -353,23 +354,23 @@ impl Face for DigitsFace {
             }
 
             // Complication: Date (right side, below hostname if shown)
-            let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
+            let host_width = canvas.text_width(&data.hostname, FONT_MEDIUM);
             canvas.draw_text(
                 width as i32 - margin - host_width,
                 y + 8,
                 &data.hostname,
-                FONT_SMALL,
+                FONT_MEDIUM,
                 colors.label,
             );
 
             if is_on(complications::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
-                    let date_width = canvas.text_width(&date_str, FONT_SMALL);
+                    let date_width = canvas.text_width(&date_str, FONT_MEDIUM);
                     canvas.draw_text(
                         width as i32 - margin - date_width,
-                        y + 22,
+                        y + 24,
                         &date_str,
-                        FONT_SMALL,
+                        FONT_MEDIUM,
                         colors.label,
                     );
                 } else {
@@ -492,7 +493,7 @@ impl Face for DigitsFace {
             // Complication: IP address
             if is_on(complications::IP_ADDRESS) {
                 if let Some(ref ip) = data.display_ip {
-                    canvas.draw_text(margin, y, ip, FONT_SMALL, colors.label);
+                    canvas.draw_text(margin, y, ip, FONT_MEDIUM, colors.label);
                 }
             }
         }
