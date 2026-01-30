@@ -2,9 +2,39 @@
 
 [![Release](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml/badge.svg)](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml)
 
-![ht32-panel](https://raw.githubusercontent.com/ananthb/ht32-panel/main/ht32-panel.png)
+![ht32-panel](https://raw.githubusercontent.com/ananthb/ht32-panel/main/images/ht32-panel-ascii-landscape.png)
 
 Front-panel display and LED control for mini PCs with HT32-based LCD and RGB LEDs ([Skullsaints Agni](https://www.electroniksindia.com/products/agni-by-skullsaints-mini-pc-intel-twin-lake-n150-vibrant-lcd-screen-m-2-ssd-mini-tower-with-rgb-lights-wifi-6-4k-uhd-dual-lan-for-home-and-office), [AceMagic S1](https://acemagic.com/products/acemagic-s1-12th-alder-laker-n95-mini-pc), etc.).
+
+## Faces
+
+### Landscape
+
+| ASCII | Arcs | Clocks |
+|-------|------|--------|
+| ![ASCII](images/ht32-panel-ascii-landscape.png) | ![Arcs](images/ht32-panel-arcs-landscape.png) | ![Clocks](images/ht32-panel-clocks-landscape.png) |
+
+| Digits | Professional |
+|--------|--------------|
+| ![Digits](images/ht32-panel-digits-landscape.png) | ![Professional](images/ht32-panel-professional-landscape.png) |
+
+### Portrait
+
+| Arcs | Clocks | Digits |
+|------|--------|--------|
+| ![Arcs](images/ht32-panel-arcs-portrait.png) | ![Clocks](images/ht32-panel-clocks-portrait.png) | ![Digits](images/ht32-panel-digits-portrait.png) |
+
+| ASCII | Professional |
+|-------|--------------|
+| ![ASCII](images/ht32-panel-ascii-portrait.png) | ![Professional](images/ht32-panel-professional-portrait.png) |
+
+### Themes
+
+Faces support color themes: Ember, Hacker, Nord, Solarized Dark, Solarized Light, and Tokyo Night.
+
+### Complications
+
+Complications are optional display elements: Time, Date, IP Address, Network activity, Disk I/O, CPU Temperature, and Hostname.
 
 ## Features
 
@@ -126,7 +156,7 @@ ht32panelctl led set rainbow --intensity 3 --speed 3
 
 The daemon includes a web UI for monitoring and controlling the panel.
 
-![ht32-panel-web-ui](https://raw.githubusercontent.com/ananthb/ht32-panel/main/ht32-panel-web-ui.png)
+![ht32-panel-web-ui](https://raw.githubusercontent.com/ananthb/ht32-panel/main/images/ht32-panel-web-ui.png)
 
 To enable the web UI, set `web.enable = true` in the config file.
 
