@@ -475,16 +475,25 @@ impl AppState {
     }
 
     /// Sets the LED theme and parameters.
+    /// Always updates state, but logs an error if hardware communication fails.
     pub async fn set_led(&self, theme: u8, intensity: u8, speed: u8) -> Result<()> {
-        let led = LedDevice::new(&self.led_device_path);
-        let led_theme = LedTheme::from_byte(theme)?;
-        led.set_theme(led_theme, intensity, speed).await?;
-
+        // Always update state so UI reflects user's choice
         *self.led_theme.write().unwrap() = theme;
         *self.led_intensity.write().unwrap() = intensity;
         *self.led_speed.write().unwrap() = speed;
-
         self.save_display_settings();
+
+        // Try to send to hardware
+        let led = LedDevice::new(&self.led_device_path);
+        let led_theme = LedTheme::from_byte(theme)?;
+        if let Err(e) = led.set_theme(led_theme, intensity, speed).await {
+            warn!(
+                "Failed to send LED command to {}: {}",
+                self.led_device_path, e
+            );
+            return Err(e.into());
+        }
+
         info!(
             "LED set to theme {} (intensity: {}, speed: {})",
             theme, intensity, speed

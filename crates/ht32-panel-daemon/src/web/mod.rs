@@ -48,6 +48,7 @@ struct LedTemplate {
     theme: u8,
     intensity: u8,
     speed: u8,
+    error: Option<String>,
 }
 
 /// Theme partial template.
@@ -205,6 +206,7 @@ async fn led_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             theme,
             intensity,
             speed,
+            error: None,
         }
         .render()
         .unwrap(),
@@ -234,7 +236,13 @@ async fn led_set(
     let intensity = form.intensity.clamp(1, 5);
     let speed = form.speed.clamp(1, 5);
 
-    let _ = state.set_led(theme, intensity, speed).await;
+    let error = match state.set_led(theme, intensity, speed).await {
+        Ok(()) => None,
+        Err(e) => {
+            tracing::error!("Failed to set LED: {}", e);
+            Some(e.to_string())
+        }
+    };
 
     let (theme, intensity, speed) = state.led_settings();
     Html(
@@ -242,6 +250,7 @@ async fn led_set(
             theme,
             intensity,
             speed,
+            error,
         }
         .render()
         .unwrap(),

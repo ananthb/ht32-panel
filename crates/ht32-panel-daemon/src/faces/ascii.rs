@@ -198,8 +198,8 @@ impl Face for AsciiFace {
         let colors = FaceColors::from_theme(theme);
         let (width, _height) = canvas.dimensions();
         let portrait = width < 200;
-        let margin = 8;
-        let mut y = margin;
+        let margin = 6;
+        let mut y = 4; // Start near top
         let bar_chars = if portrait { 10 } else { 16 };
 
         let is_enabled = |id: &str| complications.is_enabled(self.name(), id, true);
@@ -241,7 +241,7 @@ impl Face for AsciiFace {
                     colors.text,
                 );
             }
-            y += canvas.line_height(FONT_LARGE) + 2;
+            y += canvas.line_height(FONT_LARGE) + 1;
 
             // Complication: Date (right-aligned, under time)
             if is_enabled(complications::DATE) {
@@ -254,14 +254,13 @@ impl Face for AsciiFace {
                         FONT_SMALL,
                         colors.dim,
                     );
-                    y += canvas.line_height(FONT_SMALL) + 2;
                 }
             }
 
-            // Base element: Uptime (always shown)
+            // Base element: Uptime (always shown, same line as date on left)
             let uptime_text = format!("Up: {}", data.uptime);
             canvas.draw_text(margin, y, &uptime_text, FONT_SMALL, colors.dim);
-            y += canvas.line_height(FONT_SMALL) + 2;
+            y += canvas.line_height(FONT_SMALL) + 1;
 
             // Complication: IP address
             if is_enabled(complications::IP_ADDRESS) {
@@ -275,10 +274,10 @@ impl Face for AsciiFace {
                         canvas.draw_text(margin, y, first, FONT_SMALL, colors.dim);
                         y += canvas.line_height(FONT_SMALL);
                         canvas.draw_text(margin, y, second, FONT_SMALL, colors.dim);
-                        y += canvas.line_height(FONT_SMALL) + 2;
+                        y += canvas.line_height(FONT_SMALL) + 1;
                     } else {
                         canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
-                        y += canvas.line_height(FONT_SMALL) + 2;
+                        y += canvas.line_height(FONT_SMALL) + 1;
                     }
                 }
             }
@@ -288,9 +287,9 @@ impl Face for AsciiFace {
                 if let Some(temp) = data.cpu_temp {
                     let temp_text = format!("Temp: {:.0}°C", temp);
                     canvas.draw_text(margin, y, &temp_text, FONT_SMALL, colors.dim);
-                    y += canvas.line_height(FONT_SMALL) + 4;
+                    y += canvas.line_height(FONT_SMALL) + 2;
                 } else {
-                    y += 4;
+                    y += 2;
                 }
             }
 
@@ -298,13 +297,13 @@ impl Face for AsciiFace {
             let cpu_bar = ascii_bar(data.cpu_percent, bar_chars);
             let cpu_text = format!("CPU {} {:2.0}%", cpu_bar, data.cpu_percent);
             canvas.draw_text(margin, y, &cpu_text, FONT_SMALL, colors.text);
-            y += canvas.line_height(FONT_SMALL) + 2;
+            y += canvas.line_height(FONT_SMALL) + 1;
 
             // Base element: RAM bar (always shown)
             let ram_bar = ascii_bar(data.ram_percent, bar_chars);
             let ram_text = format!("RAM {} {:2.0}%", ram_bar, data.ram_percent);
             canvas.draw_text(margin, y, &ram_text, FONT_SMALL, colors.text);
-            y += canvas.line_height(FONT_SMALL) + 4;
+            y += canvas.line_height(FONT_SMALL) + 2;
 
             // Complication: Disk I/O
             if is_enabled(complications::DISK_IO) {
@@ -317,7 +316,7 @@ impl Face for AsciiFace {
                     FONT_SMALL,
                     colors.text,
                 );
-                y += canvas.line_height(FONT_SMALL) + 1;
+                y += canvas.line_height(FONT_SMALL);
                 canvas.draw_graph(
                     margin,
                     y,
@@ -328,7 +327,7 @@ impl Face for AsciiFace {
                     colors.bar_disk,
                     colors.bar_bg,
                 );
-                y += GRAPH_HEIGHT as i32 + 4;
+                y += GRAPH_HEIGHT as i32 + 2;
             }
 
             // Complication: Network
@@ -342,7 +341,7 @@ impl Face for AsciiFace {
                     FONT_SMALL,
                     colors.text,
                 );
-                y += canvas.line_height(FONT_SMALL) + 1;
+                y += canvas.line_height(FONT_SMALL);
                 canvas.draw_graph(
                     margin,
                     y,
@@ -371,7 +370,7 @@ impl Face for AsciiFace {
                     colors.text,
                 );
             }
-            y += canvas.line_height(FONT_LARGE) + 2;
+            y += canvas.line_height(FONT_LARGE) + 1;
 
             // Complication: Date (right-aligned, under time)
             if is_enabled(complications::DATE) {
@@ -384,22 +383,21 @@ impl Face for AsciiFace {
                         FONT_NORMAL,
                         colors.dim,
                     );
-                    y += canvas.line_height(FONT_NORMAL) + 2;
                 }
             }
 
-            // Base element: Uptime (always shown)
+            // Base element: Uptime (always shown, same line as date on left)
             let uptime_text = format!("Up: {}", data.uptime);
             canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, colors.dim);
-            y += canvas.line_height(FONT_NORMAL) + 2;
+            y += canvas.line_height(FONT_NORMAL) + 1;
 
             // Complication: IP address
             if is_enabled(complications::IP_ADDRESS) {
                 if let Some(ref ip) = data.display_ip {
                     canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
-                    y += canvas.line_height(FONT_SMALL) + 6;
+                    y += canvas.line_height(FONT_SMALL) + 4;
                 } else {
-                    y += 6;
+                    y += 4;
                 }
             }
 
@@ -415,13 +413,13 @@ impl Face for AsciiFace {
                 format!("CPU {} {:3.0}%", cpu_bar, data.cpu_percent)
             };
             canvas.draw_text(margin, y, &cpu_text, FONT_NORMAL, colors.text);
-            y += canvas.line_height(FONT_NORMAL) + 2;
+            y += canvas.line_height(FONT_NORMAL) + 1;
 
             // Base element: RAM bar (always shown)
             let ram_bar = ascii_bar(data.ram_percent, bar_chars);
             let ram_text = format!("RAM {} {:3.0}%", ram_bar, data.ram_percent);
             canvas.draw_text(margin, y, &ram_text, FONT_NORMAL, colors.text);
-            y += canvas.line_height(FONT_NORMAL) + 4;
+            y += canvas.line_height(FONT_NORMAL) + 2;
 
             // Complication: Disk I/O
             if is_enabled(complications::DISK_IO) {
@@ -435,7 +433,7 @@ impl Face for AsciiFace {
                     FONT_NORMAL,
                     colors.dim,
                 );
-                y += canvas.line_height(FONT_NORMAL) + 1;
+                y += canvas.line_height(FONT_NORMAL);
                 canvas.draw_graph(
                     margin,
                     y,
@@ -446,7 +444,7 @@ impl Face for AsciiFace {
                     colors.bar_disk,
                     colors.bar_bg,
                 );
-                y += GRAPH_HEIGHT as i32 + 3;
+                y += GRAPH_HEIGHT as i32 + 2;
             }
 
             // Complication: Network
@@ -461,7 +459,7 @@ impl Face for AsciiFace {
                     FONT_NORMAL,
                     colors.dim,
                 );
-                y += canvas.line_height(FONT_NORMAL) + 1;
+                y += canvas.line_height(FONT_NORMAL);
                 canvas.draw_graph(
                     margin,
                     y,
