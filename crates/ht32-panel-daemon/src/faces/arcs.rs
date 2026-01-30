@@ -389,7 +389,7 @@ impl Face for ArcsFace {
                     colors.primary,
                     colors.arc_bg,
                 );
-                canvas.draw_text(disk_r_cx - 6, disk_r_cy - 2, "R", FONT_TINY, colors.dim);
+                canvas.draw_text(disk_r_cx - 6, disk_r_cy - 4, "R", FONT_TINY, colors.dim);
 
                 let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 8;
                 Self::draw_activity_arc(
@@ -403,7 +403,21 @@ impl Face for ArcsFace {
                     colors.primary,
                     colors.arc_bg,
                 );
-                canvas.draw_text(disk_w_cx - 6, disk_r_cy - 2, "W", FONT_TINY, colors.dim);
+                canvas.draw_text(disk_w_cx - 6, disk_r_cy - 4, "W", FONT_TINY, colors.dim);
+
+                // Show disk IO rates below the arcs
+                let disk_text = format!(
+                    "{}  {}",
+                    SystemData::format_rate_compact(data.disk_read_rate),
+                    SystemData::format_rate_compact(data.disk_write_rate)
+                );
+                canvas.draw_text(
+                    margin,
+                    disk_r_cy + small_radius as i32 + 4,
+                    &disk_text,
+                    FONT_TINY,
+                    colors.dim,
+                );
             }
 
             // Complication: Network gauges
@@ -422,7 +436,7 @@ impl Face for ArcsFace {
                 );
                 canvas.draw_text(
                     net_rx_cx - 4,
-                    disk_r_cy - 2,
+                    disk_r_cy - 4,
                     "\u{2193}",
                     FONT_TINY,
                     colors.dim,
@@ -442,8 +456,23 @@ impl Face for ArcsFace {
                 );
                 canvas.draw_text(
                     net_tx_cx - 4,
-                    disk_r_cy - 2,
+                    disk_r_cy - 4,
                     "\u{2191}",
+                    FONT_TINY,
+                    colors.dim,
+                );
+
+                // Show network IO rates below the arcs
+                let net_text = format!(
+                    "{}  {}",
+                    SystemData::format_rate_compact(data.net_rx_rate),
+                    SystemData::format_rate_compact(data.net_tx_rate)
+                );
+                let net_text_width = canvas.text_width(&net_text, FONT_TINY);
+                canvas.draw_text(
+                    width as i32 - margin - net_text_width,
+                    disk_r_cy + small_radius as i32 + 4,
+                    &net_text,
                     FONT_TINY,
                     colors.dim,
                 );
@@ -574,7 +603,7 @@ impl Face for ArcsFace {
                     colors.primary,
                     colors.arc_bg,
                 );
-                canvas.draw_text(disk_r_cx - 6, disk_cy - 2, "R", FONT_TINY, colors.dim);
+                canvas.draw_text(disk_r_cx - 6, disk_cy - 4, "R", FONT_TINY, colors.dim);
 
                 let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 12;
                 Self::draw_activity_arc(
@@ -588,7 +617,21 @@ impl Face for ArcsFace {
                     colors.primary,
                     colors.arc_bg,
                 );
-                canvas.draw_text(disk_w_cx - 8, disk_cy - 2, "W", FONT_TINY, colors.dim);
+                canvas.draw_text(disk_w_cx - 8, disk_cy - 4, "W", FONT_TINY, colors.dim);
+
+                // Show disk IO rates to the right of the arcs
+                let disk_text = format!(
+                    "{} {}",
+                    SystemData::format_rate_compact(data.disk_read_rate),
+                    SystemData::format_rate_compact(data.disk_write_rate)
+                );
+                canvas.draw_text(
+                    disk_w_cx + small_radius as i32 + 8,
+                    disk_cy - 4,
+                    &disk_text,
+                    FONT_TINY,
+                    colors.dim,
+                );
             }
 
             // Complication: Network gauges
@@ -605,12 +648,12 @@ impl Face for ArcsFace {
                     colors.secondary,
                     colors.arc_bg,
                 );
-                canvas.draw_text(disk_r_cx - 4, net_cy - 2, "\u{2193}", FONT_TINY, colors.dim);
+                canvas.draw_text(disk_r_cx - 4, net_cy - 4, "\u{2193}", FONT_TINY, colors.dim);
 
-                let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 12;
+                let net_w_cx = disk_r_cx + small_radius as i32 * 2 + 12;
                 Self::draw_activity_arc(
                     canvas,
-                    disk_w_cx,
+                    net_w_cx,
                     net_cy,
                     small_radius,
                     small_stroke,
@@ -619,7 +662,21 @@ impl Face for ArcsFace {
                     colors.secondary,
                     colors.arc_bg,
                 );
-                canvas.draw_text(disk_w_cx - 4, net_cy - 2, "\u{2191}", FONT_TINY, colors.dim);
+                canvas.draw_text(net_w_cx - 4, net_cy - 4, "\u{2191}", FONT_TINY, colors.dim);
+
+                // Show network IO rates to the right of the arcs
+                let net_text = format!(
+                    "{} {}",
+                    SystemData::format_rate_compact(data.net_rx_rate),
+                    SystemData::format_rate_compact(data.net_tx_rate)
+                );
+                canvas.draw_text(
+                    net_w_cx + small_radius as i32 + 8,
+                    net_cy - 4,
+                    &net_text,
+                    FONT_TINY,
+                    colors.dim,
+                );
             }
 
             // Base element: Uptime at bottom (always shown)
