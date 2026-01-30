@@ -132,7 +132,9 @@ impl TextRenderer {
 
                     let coverage = bitmap[glyph_y * metrics.width + src_x];
                     if coverage > 0 {
-                        let px = cursor_x as i32 + (metrics.xmin as f32 * x_scale) as i32 + scaled_x as i32;
+                        let px = cursor_x as i32
+                            + (metrics.xmin as f32 * x_scale) as i32
+                            + scaled_x as i32;
                         let py = y
                             + (size as i32 - metrics.ymin - metrics.height as i32)
                             + glyph_y as i32;

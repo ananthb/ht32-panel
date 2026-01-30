@@ -4,8 +4,8 @@
 //! segmented areas for system metrics.
 
 use super::{
-    complication_names, complication_options, complications, date_formats, time_formats,
-    Complication, EnabledComplications, Face, Theme,
+    complication_names, complication_options, complications, date_formats, draw_mini_analog_clock,
+    time_formats, Complication, EnabledComplications, Face, Theme,
 };
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
@@ -166,12 +166,30 @@ impl Face for DigitsFace {
             y += canvas.line_height(FONT_MEDIUM) + 2;
 
             // Complication: Time
-            if is_on(complication_names::TIME) && time_format != time_formats::ANALOGUE {
-                let time_str = data.format_time(time_format);
-                let time_width = canvas.text_width(&time_str, FONT_TIME);
-                let time_x = (width as i32 - time_width) / 2;
-                canvas.draw_text(time_x, y, &time_str, FONT_TIME, colors.segment_on);
-                y += canvas.line_height(FONT_TIME) + 2;
+            if is_on(complication_names::TIME) {
+                if time_format == time_formats::ANALOGUE {
+                    // Draw small analog clock
+                    let clock_radius = 18_u32;
+                    let clock_cx = width as i32 / 2;
+                    let clock_cy = y + clock_radius as i32 + 2;
+                    draw_mini_analog_clock(
+                        canvas,
+                        clock_cx,
+                        clock_cy,
+                        clock_radius,
+                        data.hour,
+                        data.minute,
+                        colors.segment_on,
+                        colors.segment_on,
+                    );
+                    y += (clock_radius * 2) as i32 + 6;
+                } else {
+                    let time_str = data.format_time(time_format);
+                    let time_width = canvas.text_width(&time_str, FONT_TIME);
+                    let time_x = (width as i32 - time_width) / 2;
+                    canvas.draw_text(time_x, y, &time_str, FONT_TIME, colors.segment_on);
+                    y += canvas.line_height(FONT_TIME) + 2;
+                }
             }
 
             // Complication: Date (centered, if not hidden)
@@ -300,16 +318,33 @@ impl Face for DigitsFace {
 
             // Row 1: Hostname on left, Time on right
             canvas.draw_text(margin, y, &data.hostname, FONT_MEDIUM, colors.label);
-            if is_on(complication_names::TIME) && time_format != time_formats::ANALOGUE {
-                let time_str = data.format_time(time_format);
-                let time_width = canvas.text_width(&time_str, FONT_LARGE);
-                canvas.draw_text(
-                    width as i32 - margin - time_width,
-                    y,
-                    &time_str,
-                    FONT_LARGE,
-                    colors.segment_on,
-                );
+            if is_on(complication_names::TIME) {
+                if time_format == time_formats::ANALOGUE {
+                    // Draw small analog clock on the right
+                    let clock_radius = 12_u32;
+                    let clock_cx = width as i32 - margin - clock_radius as i32;
+                    let clock_cy = y + clock_radius as i32;
+                    draw_mini_analog_clock(
+                        canvas,
+                        clock_cx,
+                        clock_cy,
+                        clock_radius,
+                        data.hour,
+                        data.minute,
+                        colors.segment_on,
+                        colors.segment_on,
+                    );
+                } else {
+                    let time_str = data.format_time(time_format);
+                    let time_width = canvas.text_width(&time_str, FONT_LARGE);
+                    canvas.draw_text(
+                        width as i32 - margin - time_width,
+                        y,
+                        &time_str,
+                        FONT_LARGE,
+                        colors.segment_on,
+                    );
+                }
             }
             y += canvas.line_height(FONT_LARGE);
 

@@ -22,6 +22,7 @@ use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::f32::consts::PI;
 
 /// Color theme for face rendering.
 #[derive(Debug, Clone, Copy)]
@@ -93,6 +94,67 @@ impl Theme {
             _ => Self::from_preset("nord"),
         }
     }
+}
+
+/// Draws a small analog clock for use in complications.
+///
+/// This is a minimal clock face with hour markers and hands, suitable for
+/// displaying as a small complication within larger faces.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_mini_analog_clock(
+    canvas: &mut Canvas,
+    cx: i32,
+    cy: i32,
+    radius: u32,
+    hour: u8,
+    minute: u8,
+    primary_color: u32,
+    hand_color: u32,
+) {
+    let radius_f = radius as f32;
+
+    // Draw clock face outline
+    canvas.draw_arc(cx, cy, radius, 0.0, 2.0 * PI, 1.5, primary_color);
+
+    // Draw hour markers (just 4 cardinal positions for small clocks)
+    for i in 0..4 {
+        let angle = (i as f32) * PI / 2.0 - PI / 2.0;
+        let inner_r = radius_f * 0.75;
+        let outer_r = radius_f * 0.9;
+
+        let x1 = cx as f32 + inner_r * angle.cos();
+        let y1 = cy as f32 + inner_r * angle.sin();
+        let x2 = cx as f32 + outer_r * angle.cos();
+        let y2 = cy as f32 + outer_r * angle.sin();
+
+        canvas.draw_line(
+            x1 as i32,
+            y1 as i32,
+            x2 as i32,
+            y2 as i32,
+            1.5,
+            primary_color,
+        );
+    }
+
+    // Calculate hand angles (12 o'clock = -PI/2)
+    let minute_angle = (minute as f32) * PI / 30.0 - PI / 2.0;
+    let hour_angle = ((hour % 12) as f32 + minute as f32 / 60.0) * PI / 6.0 - PI / 2.0;
+
+    // Draw hour hand (shorter, thicker)
+    let hour_length = radius_f * 0.5;
+    let hour_x = cx as f32 + hour_length * hour_angle.cos();
+    let hour_y = cy as f32 + hour_length * hour_angle.sin();
+    canvas.draw_line(cx, cy, hour_x as i32, hour_y as i32, 2.5, hand_color);
+
+    // Draw minute hand (longer, thinner)
+    let minute_length = radius_f * 0.7;
+    let minute_x = cx as f32 + minute_length * minute_angle.cos();
+    let minute_y = cy as f32 + minute_length * minute_angle.sin();
+    canvas.draw_line(cx, cy, minute_x as i32, minute_y as i32, 1.5, hand_color);
+
+    // Draw center dot
+    canvas.fill_circle(cx, cy, 2, primary_color);
 }
 
 /// Information about an available theme.

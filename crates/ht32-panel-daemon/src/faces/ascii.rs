@@ -31,8 +31,8 @@
 //! ```
 
 use super::{
-    complication_names, complication_options, complications, date_formats, time_formats,
-    Complication, EnabledComplications, Face, Theme,
+    complication_names, complication_options, complications, date_formats, draw_mini_analog_clock,
+    time_formats, Complication, EnabledComplications, Face, Theme,
 };
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
@@ -201,23 +201,40 @@ impl Face for AsciiFace {
             // Portrait layout - labels on separate lines, wider graphs
             let line_height = canvas.line_height(FONT_SMALL);
             let section_spacing = 6; // Extra spacing between label/value pairs
-            // Calculate bar width to fill most of the line (leave margin on each side)
+                                     // Calculate bar width to fill most of the line (leave margin on each side)
             let bar_width = ((width as i32 - margin * 2) / 7).max(12) as usize; // ~7 pixels per char
 
             // Hostname (always shown)
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
 
             // Complication: Time (right-aligned)
-            if is_enabled(complication_names::TIME) && time_format != time_formats::ANALOGUE {
-                let time_str = data.format_time(time_format);
-                let time_width = canvas.text_width(&time_str, FONT_LARGE);
-                canvas.draw_text(
-                    width as i32 - margin - time_width,
-                    y,
-                    &time_str,
-                    FONT_LARGE,
-                    colors.text,
-                );
+            if is_enabled(complication_names::TIME) {
+                if time_format == time_formats::ANALOGUE {
+                    // Draw small analog clock on the right
+                    let clock_radius = 10_u32;
+                    let clock_cx = width as i32 - margin - clock_radius as i32;
+                    let clock_cy = y + clock_radius as i32;
+                    draw_mini_analog_clock(
+                        canvas,
+                        clock_cx,
+                        clock_cy,
+                        clock_radius,
+                        data.hour,
+                        data.minute,
+                        colors.highlight,
+                        colors.text,
+                    );
+                } else {
+                    let time_str = data.format_time(time_format);
+                    let time_width = canvas.text_width(&time_str, FONT_LARGE);
+                    canvas.draw_text(
+                        width as i32 - margin - time_width,
+                        y,
+                        &time_str,
+                        FONT_LARGE,
+                        colors.text,
+                    );
+                }
             }
             y += canvas.line_height(FONT_LARGE) + 1;
 
@@ -361,16 +378,33 @@ impl Face for AsciiFace {
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
 
             // Complication: Time (right-aligned)
-            if is_enabled(complication_names::TIME) && time_format != time_formats::ANALOGUE {
-                let time_str = data.format_time(time_format);
-                let time_width = canvas.text_width(&time_str, FONT_LARGE);
-                canvas.draw_text(
-                    width as i32 - margin - time_width,
-                    y,
-                    &time_str,
-                    FONT_LARGE,
-                    colors.text,
-                );
+            if is_enabled(complication_names::TIME) {
+                if time_format == time_formats::ANALOGUE {
+                    // Draw small analog clock on the right
+                    let clock_radius = 10_u32;
+                    let clock_cx = width as i32 - margin - clock_radius as i32;
+                    let clock_cy = y + clock_radius as i32;
+                    draw_mini_analog_clock(
+                        canvas,
+                        clock_cx,
+                        clock_cy,
+                        clock_radius,
+                        data.hour,
+                        data.minute,
+                        colors.highlight,
+                        colors.text,
+                    );
+                } else {
+                    let time_str = data.format_time(time_format);
+                    let time_width = canvas.text_width(&time_str, FONT_LARGE);
+                    canvas.draw_text(
+                        width as i32 - margin - time_width,
+                        y,
+                        &time_str,
+                        FONT_LARGE,
+                        colors.text,
+                    );
+                }
             }
             y += canvas.line_height(FONT_LARGE) + 1;
 
@@ -441,7 +475,13 @@ impl Face for AsciiFace {
                     SystemData::compute_graph_scale(&data.disk_history),
                     bar_chars + 20,
                 );
-                canvas.draw_text(margin, y, &format!("[{}]", sparkline), FONT_NORMAL, colors.bar_disk);
+                canvas.draw_text(
+                    margin,
+                    y,
+                    &format!("[{}]", sparkline),
+                    FONT_NORMAL,
+                    colors.bar_disk,
+                );
                 y += canvas.line_height(FONT_NORMAL) + 2;
             }
 
@@ -463,7 +503,13 @@ impl Face for AsciiFace {
                     SystemData::compute_graph_scale(&data.net_history),
                     bar_chars + 20,
                 );
-                canvas.draw_text(margin, y, &format!("[{}]", sparkline), FONT_NORMAL, colors.bar_net);
+                canvas.draw_text(
+                    margin,
+                    y,
+                    &format!("[{}]", sparkline),
+                    FONT_NORMAL,
+                    colors.bar_net,
+                );
             }
         }
         let _ = y;

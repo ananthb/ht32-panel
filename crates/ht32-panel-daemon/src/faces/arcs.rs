@@ -6,8 +6,8 @@
 use std::f32::consts::PI;
 
 use super::{
-    complication_names, complication_options, complications, date_formats, time_formats,
-    Complication, EnabledComplications, Face, Theme,
+    complication_names, complication_options, complications, date_formats, draw_mini_analog_clock,
+    time_formats, Complication, EnabledComplications, Face, Theme,
 };
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
@@ -270,17 +270,35 @@ impl Face for ArcsFace {
             let mut y = margin;
 
             // Top section: Time and date
-            if is_on(complication_names::TIME) && time_format != time_formats::ANALOGUE {
-                let time_str = data.format_time(time_format);
-                let time_width = canvas.text_width(&time_str, FONT_NORMAL);
-                canvas.draw_text(
-                    (width as i32 - time_width) / 2,
-                    y,
-                    &time_str,
-                    FONT_NORMAL,
-                    colors.text,
-                );
-                y += canvas.line_height(FONT_NORMAL);
+            if is_on(complication_names::TIME) {
+                if time_format == time_formats::ANALOGUE {
+                    // Draw small analog clock centered
+                    let clock_radius = 10_u32;
+                    let clock_cx = width as i32 / 2;
+                    let clock_cy = y + clock_radius as i32;
+                    draw_mini_analog_clock(
+                        canvas,
+                        clock_cx,
+                        clock_cy,
+                        clock_radius,
+                        data.hour,
+                        data.minute,
+                        colors.primary,
+                        colors.text,
+                    );
+                    y += (clock_radius * 2) as i32 + 2;
+                } else {
+                    let time_str = data.format_time(time_format);
+                    let time_width = canvas.text_width(&time_str, FONT_NORMAL);
+                    canvas.draw_text(
+                        (width as i32 - time_width) / 2,
+                        y,
+                        &time_str,
+                        FONT_NORMAL,
+                        colors.text,
+                    );
+                    y += canvas.line_height(FONT_NORMAL);
+                }
             }
 
             if is_on(complication_names::DATE) {
@@ -512,9 +530,26 @@ impl Face for ArcsFace {
             let top_y = margin;
 
             // Complication: Time
-            if is_on(complication_names::TIME) && time_format != time_formats::ANALOGUE {
-                let time_str = data.format_time(time_format);
-                canvas.draw_text(margin, top_y, &time_str, FONT_LARGE, colors.text);
+            if is_on(complication_names::TIME) {
+                if time_format == time_formats::ANALOGUE {
+                    // Draw small analog clock on the left
+                    let clock_radius = 12_u32;
+                    let clock_cx = margin + clock_radius as i32;
+                    let clock_cy = top_y + clock_radius as i32;
+                    draw_mini_analog_clock(
+                        canvas,
+                        clock_cx,
+                        clock_cy,
+                        clock_radius,
+                        data.hour,
+                        data.minute,
+                        colors.primary,
+                        colors.text,
+                    );
+                } else {
+                    let time_str = data.format_time(time_format);
+                    canvas.draw_text(margin, top_y, &time_str, FONT_LARGE, colors.text);
+                }
             }
 
             // Hostname at top right (always shown)

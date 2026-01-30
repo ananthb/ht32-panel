@@ -111,55 +111,57 @@ impl ClockFace {
 
         // In portrait mode with font sizes 56-96, grow digits taller to fill screen height
         // while scaling horizontally to prevent overflow
-        let (effective_font_size, x_scale) = if portrait && time_font_size > 56.0 && time_font_size <= 96.0 {
-            // Calculate space for hostname and date
-            let hostname_space = if layout.show_hostname {
-                canvas.line_height(FONT_SMALL) + 8
+        let (effective_font_size, x_scale) =
+            if portrait && time_font_size > 56.0 && time_font_size <= 96.0 {
+                // Calculate space for hostname and date
+                let hostname_space = if layout.show_hostname {
+                    canvas.line_height(FONT_SMALL) + 8
+                } else {
+                    0
+                };
+                let date_space = if layout.show_date && layout.date.is_some() {
+                    canvas.line_height(FONT_NORMAL) + 8
+                } else {
+                    0
+                };
+
+                // Available height for the time digits (with some margin)
+                let margin_v = 8.0;
+                let available_height =
+                    height as f32 - hostname_space as f32 - date_space as f32 - margin_v * 2.0;
+
+                // Calculate font size that would fill the available height
+                // line_height is approximately font_size * 1.2
+                let target_font_size = (available_height / 1.2).min(96.0);
+
+                // Use the larger of requested size and calculated size, capped at 96
+                let effective_size = time_font_size.max(target_font_size).min(96.0);
+
+                // Calculate horizontal scale to fit within width
+                let margin_h = 4.0;
+                let available_width = width as f32 - margin_h * 2.0;
+                let natural_width = canvas.text_width(&time_str, effective_size) as f32;
+                let scale = if natural_width > available_width {
+                    available_width / natural_width
+                } else {
+                    1.0
+                };
+
+                (effective_size, scale)
+            } else if portrait && time_font_size > 96.0 {
+                // For sizes > 96, just scale horizontally to fit
+                let margin = 4.0;
+                let available_width = width as f32 - margin * 2.0;
+                let natural_width = canvas.text_width(&time_str, time_font_size) as f32;
+                let scale = if natural_width > available_width {
+                    available_width / natural_width
+                } else {
+                    1.0
+                };
+                (time_font_size, scale)
             } else {
-                0
+                (time_font_size, 1.0)
             };
-            let date_space = if layout.show_date && layout.date.is_some() {
-                canvas.line_height(FONT_NORMAL) + 8
-            } else {
-                0
-            };
-
-            // Available height for the time digits (with some margin)
-            let margin_v = 8.0;
-            let available_height = height as f32 - hostname_space as f32 - date_space as f32 - margin_v * 2.0;
-
-            // Calculate font size that would fill the available height
-            // line_height is approximately font_size * 1.2
-            let target_font_size = (available_height / 1.2).min(96.0);
-
-            // Use the larger of requested size and calculated size, capped at 96
-            let effective_size = time_font_size.max(target_font_size).min(96.0);
-
-            // Calculate horizontal scale to fit within width
-            let margin_h = 4.0;
-            let available_width = width as f32 - margin_h * 2.0;
-            let natural_width = canvas.text_width(&time_str, effective_size) as f32;
-            let scale = if natural_width > available_width {
-                available_width / natural_width
-            } else {
-                1.0
-            };
-
-            (effective_size, scale)
-        } else if portrait && time_font_size > 96.0 {
-            // For sizes > 96, just scale horizontally to fit
-            let margin = 4.0;
-            let available_width = width as f32 - margin * 2.0;
-            let natural_width = canvas.text_width(&time_str, time_font_size) as f32;
-            let scale = if natural_width > available_width {
-                available_width / natural_width
-            } else {
-                1.0
-            };
-            (time_font_size, scale)
-        } else {
-            (time_font_size, 1.0)
-        };
 
         // Calculate total height needed
         let time_height = canvas.line_height(effective_font_size);
