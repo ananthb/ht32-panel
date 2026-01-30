@@ -386,7 +386,19 @@ async fn handle_complication(action: ComplicationCommands, client: &DaemonClient
                                 let opt_id = opt["id"].as_str().unwrap_or("");
                                 let opt_name = opt["name"].as_str().unwrap_or("");
                                 let current = opt["current_value"].as_str().unwrap_or("");
-                                println!("      - {}: {} (current: {})", opt_id, opt_name, current);
+                                let opt_type = opt["type"].as_str().unwrap_or("choice");
+
+                                if opt_type == "range" {
+                                    let min = opt["min"].as_f64().unwrap_or(0.0);
+                                    let max = opt["max"].as_f64().unwrap_or(100.0);
+                                    let step = opt["step"].as_f64().unwrap_or(1.0);
+                                    println!(
+                                        "      - {}: {} (current: {}, range: {}-{}, step: {})",
+                                        opt_id, opt_name, current, min, max, step
+                                    );
+                                } else {
+                                    println!("      - {}: {} (current: {})", opt_id, opt_name, current);
+                                }
                             }
                         }
                     }

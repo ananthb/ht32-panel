@@ -135,12 +135,21 @@ pub fn available_themes() -> Vec<ThemeInfo> {
 }
 
 /// Type of complication option value.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ComplicationOptionType {
     /// A choice from a list of values.
     Choice(Vec<ComplicationChoice>),
     /// A boolean toggle.
     Boolean,
+    /// A numeric range (slider). Values are stored as strings but represent f32.
+    Range {
+        /// Minimum value.
+        min: f32,
+        /// Maximum value.
+        max: f32,
+        /// Step increment.
+        step: f32,
+    },
 }
 
 /// A choice value for a complication option.
@@ -191,6 +200,25 @@ impl ComplicationOption {
             name: name.to_string(),
             description: description.to_string(),
             option_type: ComplicationOptionType::Choice(choices),
+            default_value: default.to_string(),
+        }
+    }
+
+    /// Creates a new range-based option (slider).
+    pub fn range(
+        id: &str,
+        name: &str,
+        description: &str,
+        min: f32,
+        max: f32,
+        step: f32,
+        default: f32,
+    ) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: description.to_string(),
+            option_type: ComplicationOptionType::Range { min, max, step },
             default_value: default.to_string(),
         }
     }
@@ -258,6 +286,7 @@ pub mod complication_options {
     pub const DATE_FORMAT: &str = "format";
     pub const IP_TYPE: &str = "ip_type";
     pub const INTERFACE: &str = "interface";
+    pub const SIZE: &str = "size";
 }
 
 /// Time format options.
@@ -397,11 +426,20 @@ pub mod complications {
 
     /// Digital time complication (replaces analog clock).
     pub fn digital_time(default_enabled: bool) -> Complication {
-        Complication::new(
+        Complication::with_options(
             "digital_time",
             "Digital Time",
             "Display the current time in digital format",
             default_enabled,
+            vec![ComplicationOption::range(
+                complication_options::SIZE,
+                "Size",
+                "Size of the digital clock display",
+                32.0,  // min (current default)
+                96.0,  // max (large enough to fill screen)
+                4.0,   // step
+                32.0,  // default
+            )],
         )
     }
 }

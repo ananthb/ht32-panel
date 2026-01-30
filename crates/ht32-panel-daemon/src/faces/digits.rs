@@ -272,61 +272,51 @@ impl Face for DigitsFace {
                 }
             }
         } else {
-            // Landscape layout
-            // Complication: Time
+            // Landscape layout - hostname at top, better vertical spacing
+            let col_width = (width as i32 - margin * 5) / 4;
+
+            // Hostname at the very top
+            canvas.draw_text(margin, y, &data.hostname, FONT_MEDIUM, colors.label);
+            y += canvas.line_height(FONT_MEDIUM) + 2;
+
+            // Complication: Time (large, centered)
             if is_on(complication_names::TIME) && time_format != time_formats::ANALOGUE {
                 let time_str = data.format_time(time_format);
-                canvas.draw_text(margin, y, &time_str, FONT_TIME, colors.segment_on);
+                let time_width = canvas.text_width(&time_str, FONT_TIME);
+                let time_x = (width as i32 - time_width) / 2;
+                canvas.draw_text(time_x, y, &time_str, FONT_TIME, colors.segment_on);
+                y += canvas.line_height(FONT_TIME) + 2;
             }
 
-            // Complication: Date (right side, below hostname if shown)
-            let host_width = canvas.text_width(&data.hostname, FONT_MEDIUM);
-            canvas.draw_text(
-                width as i32 - margin - host_width,
-                y + 8,
-                &data.hostname,
-                FONT_MEDIUM,
-                colors.label,
-            );
-
+            // Date and uptime on same line below time
             if is_on(complication_names::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
-                    let date_width = canvas.text_width(&date_str, FONT_MEDIUM);
-                    canvas.draw_text(
-                        width as i32 - margin - date_width,
-                        y + 24,
-                        &date_str,
-                        FONT_MEDIUM,
-                        colors.label,
-                    );
-                } else {
-                    let uptime_text = format!("UP {}", data.uptime);
-                    let uptime_width = canvas.text_width(&uptime_text, FONT_SMALL);
-                    canvas.draw_text(
-                        width as i32 - margin - uptime_width,
-                        y + 22,
-                        &uptime_text,
-                        FONT_SMALL,
-                        colors.label,
-                    );
+                    canvas.draw_text(margin, y, &date_str, FONT_MEDIUM, colors.label);
                 }
-            } else {
-                let uptime_text = format!("UP {}", data.uptime);
-                let uptime_width = canvas.text_width(&uptime_text, FONT_SMALL);
-                canvas.draw_text(
-                    width as i32 - margin - uptime_width,
-                    y + 22,
-                    &uptime_text,
-                    FONT_SMALL,
-                    colors.label,
-                );
             }
-            y += canvas.line_height(FONT_TIME) + 6;
+            let uptime_text = format!("UP {}", data.uptime);
+            let uptime_width = canvas.text_width(&uptime_text, FONT_SMALL);
+            canvas.draw_text(
+                width as i32 - margin - uptime_width,
+                y + 2,
+                &uptime_text,
+                FONT_SMALL,
+                colors.label,
+            );
+            y += canvas.line_height(FONT_MEDIUM) + 2;
+
+            // IP address below date/uptime
+            if is_on(complication_names::IP_ADDRESS) {
+                if let Some(ref ip) = data.display_ip {
+                    let ip_width = canvas.text_width(ip, FONT_SMALL);
+                    let ip_x = (width as i32 - ip_width) / 2;
+                    canvas.draw_text(ip_x, y, ip, FONT_SMALL, colors.label);
+                    y += canvas.line_height(FONT_SMALL) + 2;
+                }
+            }
 
             Self::draw_divider(canvas, y, width, margin, colors.divider);
-            y += 8;
-
-            let col_width = (width as i32 - margin * 5) / 4;
+            y += 6;
 
             // Row 1: CPU (base), RAM (base), Temp (complication)
             Self::draw_segment_value(
@@ -364,7 +354,7 @@ impl Face for DigitsFace {
             y += 34;
 
             Self::draw_divider(canvas, y, width, margin, colors.divider);
-            y += 8;
+            y += 6;
 
             // Row 2: Disk R, Disk W (complication), Net Down, Net Up (complication)
             if is_on(complication_names::DISK_IO) {
@@ -410,17 +400,6 @@ impl Face for DigitsFace {
                     colors.label,
                     colors.segment_on,
                 );
-            }
-            y += 34;
-
-            Self::draw_divider(canvas, y, width, margin, colors.divider);
-            y += 6;
-
-            // Complication: IP address
-            if is_on(complication_names::IP_ADDRESS) {
-                if let Some(ref ip) = data.display_ip {
-                    canvas.draw_text(margin, y, ip, FONT_MEDIUM, colors.label);
-                }
             }
         }
         let _ = y;

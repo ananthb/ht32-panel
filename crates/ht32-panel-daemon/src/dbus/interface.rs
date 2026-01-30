@@ -339,10 +339,10 @@ impl Daemon1Interface {
                     let current_value = self.state.get_complication_option(&c.id, &opt.id)
                         .unwrap_or_else(|| opt.default_value.clone());
 
-                    let choices: Vec<serde_json::Value> = match &opt.option_type {
+                    match &opt.option_type {
                         crate::faces::ComplicationOptionType::Choice(choices) => {
                             // For network interface, dynamically get available interfaces
-                            if c.id == "network" && opt.id == "interface" {
+                            let choice_list: Vec<serde_json::Value> = if c.id == "network" && opt.id == "interface" {
                                 let mut ifaces: Vec<serde_json::Value> = vec![
                                     serde_json::json!({"value": "auto", "label": "Auto-detect"})
                                 ];
@@ -354,23 +354,42 @@ impl Daemon1Interface {
                                 choices.iter().map(|ch| {
                                     serde_json::json!({"value": ch.value, "label": ch.label})
                                 }).collect()
-                            }
+                            };
+                            serde_json::json!({
+                                "id": opt.id,
+                                "name": opt.name,
+                                "description": opt.description,
+                                "current_value": current_value,
+                                "type": "choice",
+                                "choices": choice_list
+                            })
                         }
                         crate::faces::ComplicationOptionType::Boolean => {
-                            vec![
-                                serde_json::json!({"value": "true", "label": "Yes"}),
-                                serde_json::json!({"value": "false", "label": "No"}),
-                            ]
+                            serde_json::json!({
+                                "id": opt.id,
+                                "name": opt.name,
+                                "description": opt.description,
+                                "current_value": current_value,
+                                "type": "boolean",
+                                "choices": [
+                                    {"value": "true", "label": "Yes"},
+                                    {"value": "false", "label": "No"}
+                                ]
+                            })
                         }
-                    };
-
-                    serde_json::json!({
-                        "id": opt.id,
-                        "name": opt.name,
-                        "description": opt.description,
-                        "current_value": current_value,
-                        "choices": choices
-                    })
+                        crate::faces::ComplicationOptionType::Range { min, max, step } => {
+                            serde_json::json!({
+                                "id": opt.id,
+                                "name": opt.name,
+                                "description": opt.description,
+                                "current_value": current_value,
+                                "type": "range",
+                                "min": min,
+                                "max": max,
+                                "step": step
+                            })
+                        }
+                    }
                 }).collect();
 
                 serde_json::json!({

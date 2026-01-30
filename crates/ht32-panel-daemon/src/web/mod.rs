@@ -90,12 +90,21 @@ struct ComplicationOptionChoice {
     label: String,
 }
 
+/// Range parameters for slider options.
+struct ComplicationOptionRange {
+    min: f32,
+    max: f32,
+    step: f32,
+}
+
 /// Complication option for template.
 struct ComplicationOptionItem {
     id: String,
     name: String,
     current_value: String,
+    is_range: bool,
     choices: Vec<ComplicationOptionChoice>,
+    range: Option<ComplicationOptionRange>,
 }
 
 /// Complication item for template.
@@ -367,10 +376,10 @@ async fn complications_get(State(state): State<Arc<AppState>>) -> impl IntoRespo
                         .get_complication_option(&c.id, &opt.id)
                         .unwrap_or_else(|| opt.default_value.clone());
 
-                    let choices: Vec<ComplicationOptionChoice> = match &opt.option_type {
+                    match &opt.option_type {
                         ComplicationOptionType::Choice(choices) => {
                             // For network interface, dynamically populate with available interfaces
-                            if c.id == complication_names::NETWORK
+                            let choice_list = if c.id == complication_names::NETWORK
                                 && opt.id == complication_options::INTERFACE
                             {
                                 let mut iface_choices = vec![ComplicationOptionChoice {
@@ -392,27 +401,49 @@ async fn complications_get(State(state): State<Arc<AppState>>) -> impl IntoRespo
                                         label: ch.label.clone(),
                                     })
                                     .collect()
+                            };
+                            ComplicationOptionItem {
+                                id: opt.id.clone(),
+                                name: opt.name.clone(),
+                                current_value,
+                                is_range: false,
+                                choices: choice_list,
+                                range: None,
                             }
                         }
                         ComplicationOptionType::Boolean => {
-                            vec![
-                                ComplicationOptionChoice {
-                                    value: "true".to_string(),
-                                    label: "Yes".to_string(),
-                                },
-                                ComplicationOptionChoice {
-                                    value: "false".to_string(),
-                                    label: "No".to_string(),
-                                },
-                            ]
+                            ComplicationOptionItem {
+                                id: opt.id.clone(),
+                                name: opt.name.clone(),
+                                current_value,
+                                is_range: false,
+                                choices: vec![
+                                    ComplicationOptionChoice {
+                                        value: "true".to_string(),
+                                        label: "Yes".to_string(),
+                                    },
+                                    ComplicationOptionChoice {
+                                        value: "false".to_string(),
+                                        label: "No".to_string(),
+                                    },
+                                ],
+                                range: None,
+                            }
                         }
-                    };
-
-                    ComplicationOptionItem {
-                        id: opt.id.clone(),
-                        name: opt.name.clone(),
-                        current_value,
-                        choices,
+                        ComplicationOptionType::Range { min, max, step } => {
+                            ComplicationOptionItem {
+                                id: opt.id.clone(),
+                                name: opt.name.clone(),
+                                current_value,
+                                is_range: true,
+                                choices: Vec::new(),
+                                range: Some(ComplicationOptionRange {
+                                    min: *min,
+                                    max: *max,
+                                    step: *step,
+                                }),
+                            }
+                        }
                     }
                 })
                 .collect();
@@ -493,10 +524,10 @@ fn render_complications(state: &Arc<AppState>) -> Html<String> {
                         .get_complication_option(&c.id, &opt.id)
                         .unwrap_or_else(|| opt.default_value.clone());
 
-                    let choices: Vec<ComplicationOptionChoice> = match &opt.option_type {
+                    match &opt.option_type {
                         ComplicationOptionType::Choice(choices) => {
                             // For network interface, dynamically populate with available interfaces
-                            if c.id == complication_names::NETWORK
+                            let choice_list = if c.id == complication_names::NETWORK
                                 && opt.id == complication_options::INTERFACE
                             {
                                 let mut iface_choices = vec![ComplicationOptionChoice {
@@ -518,27 +549,49 @@ fn render_complications(state: &Arc<AppState>) -> Html<String> {
                                         label: ch.label.clone(),
                                     })
                                     .collect()
+                            };
+                            ComplicationOptionItem {
+                                id: opt.id.clone(),
+                                name: opt.name.clone(),
+                                current_value,
+                                is_range: false,
+                                choices: choice_list,
+                                range: None,
                             }
                         }
                         ComplicationOptionType::Boolean => {
-                            vec![
-                                ComplicationOptionChoice {
-                                    value: "true".to_string(),
-                                    label: "Yes".to_string(),
-                                },
-                                ComplicationOptionChoice {
-                                    value: "false".to_string(),
-                                    label: "No".to_string(),
-                                },
-                            ]
+                            ComplicationOptionItem {
+                                id: opt.id.clone(),
+                                name: opt.name.clone(),
+                                current_value,
+                                is_range: false,
+                                choices: vec![
+                                    ComplicationOptionChoice {
+                                        value: "true".to_string(),
+                                        label: "Yes".to_string(),
+                                    },
+                                    ComplicationOptionChoice {
+                                        value: "false".to_string(),
+                                        label: "No".to_string(),
+                                    },
+                                ],
+                                range: None,
+                            }
                         }
-                    };
-
-                    ComplicationOptionItem {
-                        id: opt.id.clone(),
-                        name: opt.name.clone(),
-                        current_value,
-                        choices,
+                        ComplicationOptionType::Range { min, max, step } => {
+                            ComplicationOptionItem {
+                                id: opt.id.clone(),
+                                name: opt.name.clone(),
+                                current_value,
+                                is_range: true,
+                                choices: Vec::new(),
+                                range: Some(ComplicationOptionRange {
+                                    min: *min,
+                                    max: *max,
+                                    step: *step,
+                                }),
+                            }
+                        }
                     }
                 })
                 .collect();

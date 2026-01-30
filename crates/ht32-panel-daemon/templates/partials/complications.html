@@ -20,11 +20,20 @@
                 <input type="hidden" name="option" value="{{ opt.id }}">
                 <label class="option-label">
                     <span class="option-name">{{ opt.name }}:</span>
+                    {% if opt.is_range %}
+                    {% if let Some(range) = opt.range %}
+                    <input type="range" name="value" class="option-range"
+                           min="{{ range.min }}" max="{{ range.max }}" step="{{ range.step }}"
+                           value="{{ opt.current_value }}">
+                    <span class="range-value">{{ opt.current_value }}</span>
+                    {% endif %}
+                    {% else %}
                     <select name="value" class="option-select">
                         {% for choice in opt.choices %}
                         <option value="{{ choice.value }}" {% if opt.current_value == choice.value %}selected{% endif %}>{{ choice.label }}</option>
                         {% endfor %}
                     </select>
+                    {% endif %}
                 </label>
             </form>
             {% endfor %}
@@ -108,5 +117,34 @@
 .option-select:focus {
     outline: none;
     border-color: #00d4ff;
+}
+.option-range {
+    flex: 1;
+    height: 6px;
+    background: #1a508b;
+    border-radius: 3px;
+    cursor: pointer;
+    accent-color: #00d4ff;
+}
+.option-range::-webkit-slider-thumb {
+    width: 16px;
+    height: 16px;
+    background: #00d4ff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+.option-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #00d4ff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+.range-value {
+    min-width: 40px;
+    text-align: right;
+    color: #fff;
+    font-size: 0.85rem;
 }
 </style>

@@ -247,95 +247,116 @@ impl Face for ArcsFace {
             .unwrap_or(date_formats::ISO);
 
         if portrait {
-            let margin = 8;
-            let gauge_radius = 28_u32;
-            let stroke = 6.0;
-            let small_radius = 18_u32;
+            // Portrait layout: CPU, RAM stacked vertically, disk/net side by side at bottom
+            let margin = 6;
+            let center_x = width as i32 / 2;
+
+            // Calculate vertical layout to use full height
+            // Reserve space: top text (~30px), bottom text (~24px), remaining for arcs
+            let top_text_height = 28_i32;
+            let bottom_text_height = 24_i32;
+            let available_height =
+                height as i32 - margin * 2 - top_text_height - bottom_text_height;
+
+            // Large arcs (CPU, RAM) get 35% each, small arcs row gets 30%
+            let large_arc_height = (available_height * 35) / 100;
+            let small_arc_height = (available_height * 30) / 100;
+
+            let large_radius = ((large_arc_height - 8) / 2).min(38) as u32;
+            let large_stroke = 7.0;
+            let small_radius = ((small_arc_height - 4) / 2).min(16) as u32;
             let small_stroke = 4.0;
 
-            let mut top_y = margin;
+            let mut y = margin;
 
-            // Complication: Time at top
+            // Top section: Time and date
             if is_on(complication_names::TIME) && time_format != time_formats::ANALOGUE {
                 let time_str = data.format_time(time_format);
-                let time_width = canvas.text_width(&time_str, FONT_LARGE);
-                let time_x = (width as i32 - time_width) / 2;
-                canvas.draw_text(time_x, top_y, &time_str, FONT_LARGE, colors.text);
-                top_y += canvas.line_height(FONT_LARGE) + 2;
+                let time_width = canvas.text_width(&time_str, FONT_NORMAL);
+                canvas.draw_text(
+                    (width as i32 - time_width) / 2,
+                    y,
+                    &time_str,
+                    FONT_NORMAL,
+                    colors.text,
+                );
+                y += canvas.line_height(FONT_NORMAL);
             }
 
-            // Complication: Date (centered)
             if is_on(complication_names::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
-                    let date_width = canvas.text_width(&date_str, FONT_SMALL);
-                    let date_x = (width as i32 - date_width) / 2;
-                    canvas.draw_text(date_x, top_y, &date_str, FONT_SMALL, colors.dim);
-                    top_y += canvas.line_height(FONT_SMALL) + 4;
+                    let date_width = canvas.text_width(&date_str, FONT_TINY);
+                    canvas.draw_text(
+                        (width as i32 - date_width) / 2,
+                        y,
+                        &date_str,
+                        FONT_TINY,
+                        colors.dim,
+                    );
                 }
             }
+            y = margin + top_text_height;
 
-            // Position gauges below time/date section
-            let row1_y = top_y.max(margin + 8);
-            let cpu_cx = margin + gauge_radius as i32 + 4;
-            let cpu_cy = row1_y + gauge_radius as i32;
-
-            // Base element: CPU gauge (always shown)
+            // CPU arc (centered)
+            let cpu_cy = y + large_radius as i32 + 2;
             Self::draw_arc_gauge(
                 canvas,
-                cpu_cx,
+                center_x,
                 cpu_cy,
-                gauge_radius,
-                stroke,
+                large_radius,
+                large_stroke,
                 data.cpu_percent,
                 colors.primary,
                 colors.arc_bg,
             );
-            canvas.draw_text(cpu_cx - 10, cpu_cy - 6, "CPU", FONT_TINY, colors.dim);
-            let cpu_text = format!("{:.0}", data.cpu_percent);
+            canvas.draw_text(center_x - 10, cpu_cy - 6, "CPU", FONT_TINY, colors.dim);
+            let cpu_text = format!("{:.0}%", data.cpu_percent);
             let cpu_w = canvas.text_width(&cpu_text, FONT_SMALL);
             canvas.draw_text(
-                cpu_cx - cpu_w / 2,
+                center_x - cpu_w / 2,
                 cpu_cy + 4,
                 &cpu_text,
                 FONT_SMALL,
                 colors.text,
             );
+            y += large_arc_height;
 
-            // Base element: RAM gauge (always shown)
-            let ram_cx = width as i32 - margin - gauge_radius as i32 - 4;
-            let ram_cy = cpu_cy;
+            // RAM arc (centered)
+            let ram_cy = y + large_radius as i32 + 2;
             Self::draw_arc_gauge(
                 canvas,
-                ram_cx,
+                center_x,
                 ram_cy,
-                gauge_radius,
-                stroke,
+                large_radius,
+                large_stroke,
                 data.ram_percent,
                 colors.secondary,
                 colors.arc_bg,
             );
-            canvas.draw_text(ram_cx - 10, ram_cy - 6, "RAM", FONT_TINY, colors.dim);
-            let ram_text = format!("{:.0}", data.ram_percent);
+            canvas.draw_text(center_x - 12, ram_cy - 6, "RAM", FONT_TINY, colors.dim);
+            let ram_text = format!("{:.0}%", data.ram_percent);
             let ram_w = canvas.text_width(&ram_text, FONT_SMALL);
             canvas.draw_text(
-                ram_cx - ram_w / 2,
+                center_x - ram_w / 2,
                 ram_cy + 4,
                 &ram_text,
                 FONT_SMALL,
                 colors.text,
             );
+            y += large_arc_height;
 
-            let row2_y = row1_y + gauge_radius as i32 * 2 + 16;
+            // Bottom row: Disk and Network arcs side by side
             let io_max = 100_000_000.0;
-            let disk_r_cx = margin + small_radius as i32 + 4;
-            let disk_r_cy = row2_y + small_radius as i32;
+            let small_cy = y + small_radius as i32 + 2;
+            let quarter_w = width as i32 / 4;
 
-            // Complication: Disk gauges
+            // Disk gauges (left half)
             if is_on(complication_names::DISK_IO) {
+                let disk_r_cx = quarter_w - small_radius as i32 - 2;
                 Self::draw_activity_arc(
                     canvas,
                     disk_r_cx,
-                    disk_r_cy,
+                    small_cy,
                     small_radius,
                     small_stroke,
                     data.disk_read_rate,
@@ -343,30 +364,28 @@ impl Face for ArcsFace {
                     colors.primary,
                     colors.arc_bg,
                 );
-                // Number centered in dial
                 let disk_r_text = format_rate_short(data.disk_read_rate);
                 let disk_r_w = canvas.text_width(&disk_r_text, FONT_TINY);
                 canvas.draw_text(
                     disk_r_cx - disk_r_w / 2,
-                    disk_r_cy - 5,
+                    small_cy - 4,
                     &disk_r_text,
                     FONT_TINY,
                     colors.text,
                 );
-                // Letter in bottom open space
                 canvas.draw_text(
                     disk_r_cx - 3,
-                    disk_r_cy + small_radius as i32 / 2,
+                    small_cy + small_radius as i32 / 2,
                     "R",
                     FONT_TINY,
                     colors.dim,
                 );
 
-                let disk_w_cx = disk_r_cx + small_radius as i32 * 2 + 8;
+                let disk_w_cx = quarter_w + small_radius as i32 + 2;
                 Self::draw_activity_arc(
                     canvas,
                     disk_w_cx,
-                    disk_r_cy,
+                    small_cy,
                     small_radius,
                     small_stroke,
                     data.disk_write_rate,
@@ -374,33 +393,31 @@ impl Face for ArcsFace {
                     colors.primary,
                     colors.arc_bg,
                 );
-                // Number centered in dial
                 let disk_w_text = format_rate_short(data.disk_write_rate);
                 let disk_w_w = canvas.text_width(&disk_w_text, FONT_TINY);
                 canvas.draw_text(
                     disk_w_cx - disk_w_w / 2,
-                    disk_r_cy - 5,
+                    small_cy - 4,
                     &disk_w_text,
                     FONT_TINY,
                     colors.text,
                 );
-                // Letter in bottom open space
                 canvas.draw_text(
                     disk_w_cx - 4,
-                    disk_r_cy + small_radius as i32 / 2,
+                    small_cy + small_radius as i32 / 2,
                     "W",
                     FONT_TINY,
                     colors.dim,
                 );
             }
 
-            // Complication: Network gauges
+            // Network gauges (right half)
             if is_on(complication_names::NETWORK) {
-                let net_rx_cx = width as i32 - margin - small_radius as i32 * 4 - 12;
+                let net_rx_cx = quarter_w * 3 - small_radius as i32 - 2;
                 Self::draw_activity_arc(
                     canvas,
                     net_rx_cx,
-                    disk_r_cy,
+                    small_cy,
                     small_radius,
                     small_stroke,
                     data.net_rx_rate,
@@ -408,30 +425,28 @@ impl Face for ArcsFace {
                     colors.secondary,
                     colors.arc_bg,
                 );
-                // Number centered in dial
                 let net_rx_text = format_rate_short(data.net_rx_rate);
                 let net_rx_w = canvas.text_width(&net_rx_text, FONT_TINY);
                 canvas.draw_text(
                     net_rx_cx - net_rx_w / 2,
-                    disk_r_cy - 5,
+                    small_cy - 4,
                     &net_rx_text,
                     FONT_TINY,
                     colors.text,
                 );
-                // Arrow in bottom open space
                 canvas.draw_text(
                     net_rx_cx - 4,
-                    disk_r_cy + small_radius as i32 / 2,
+                    small_cy + small_radius as i32 / 2,
                     "\u{2193}",
                     FONT_TINY,
                     colors.dim,
                 );
 
-                let net_tx_cx = width as i32 - margin - small_radius as i32 - 4;
+                let net_tx_cx = quarter_w * 3 + small_radius as i32 + 2;
                 Self::draw_activity_arc(
                     canvas,
                     net_tx_cx,
-                    disk_r_cy,
+                    small_cy,
                     small_radius,
                     small_stroke,
                     data.net_tx_rate,
@@ -439,39 +454,36 @@ impl Face for ArcsFace {
                     colors.secondary,
                     colors.arc_bg,
                 );
-                // Number centered in dial
                 let net_tx_text = format_rate_short(data.net_tx_rate);
                 let net_tx_w = canvas.text_width(&net_tx_text, FONT_TINY);
                 canvas.draw_text(
                     net_tx_cx - net_tx_w / 2,
-                    disk_r_cy - 5,
+                    small_cy - 4,
                     &net_tx_text,
                     FONT_TINY,
                     colors.text,
                 );
-                // Arrow in bottom open space
                 canvas.draw_text(
                     net_tx_cx - 4,
-                    disk_r_cy + small_radius as i32 / 2,
+                    small_cy + small_radius as i32 / 2,
                     "\u{2191}",
                     FONT_TINY,
                     colors.dim,
                 );
             }
 
-            // Base elements: Hostname and uptime at bottom (always shown)
-            let bottom_y = height as i32 - margin - 42;
-            canvas.draw_text(margin, bottom_y, &data.hostname, FONT_SMALL, colors.dim);
+            // Bottom text: hostname, uptime, IP
+            let bottom_y = height as i32 - margin - 22;
+            canvas.draw_text(margin, bottom_y, &data.hostname, FONT_TINY, colors.dim);
             let uptime_text = format!("Up: {}", data.uptime);
-            canvas.draw_text(margin, bottom_y + 14, &uptime_text, FONT_TINY, colors.dim);
+            canvas.draw_text(margin, bottom_y + 11, &uptime_text, FONT_TINY, colors.dim);
 
-            // Complication: IP address
             if is_on(complication_names::IP_ADDRESS) {
                 if let Some(ref ip) = data.display_ip {
                     let ip_width = canvas.text_width(ip, FONT_TINY);
                     canvas.draw_text(
-                        (width as i32 - ip_width) / 2,
-                        bottom_y + 28,
+                        width as i32 - margin - ip_width,
+                        bottom_y + 11,
                         ip,
                         FONT_TINY,
                         colors.dim,

@@ -9,6 +9,9 @@ use super::{
     complication_names, complication_options, complications, date_formats, Complication,
     EnabledComplications, Face, Theme,
 };
+
+/// Default font size for digital time.
+const DEFAULT_TIME_SIZE: f32 = 32.0;
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
 
@@ -58,7 +61,6 @@ impl FaceColors {
 }
 
 /// Font sizes.
-const FONT_LARGE: f32 = 32.0;
 const FONT_NORMAL: f32 = 14.0;
 const FONT_SMALL: f32 = 12.0;
 
@@ -101,12 +103,13 @@ impl ClockFace {
         minute: u8,
         layout: &ClockLayout,
         colors: &FaceColors,
+        time_font_size: f32,
     ) {
         let (_, height) = canvas.dimensions();
         let time_str = format!("{:02}:{:02}", hour, minute);
 
         // Calculate total height needed
-        let time_height = canvas.line_height(FONT_LARGE);
+        let time_height = canvas.line_height(time_font_size);
         let mut total_height = time_height;
         if layout.show_hostname {
             total_height += canvas.line_height(FONT_SMALL) + 4;
@@ -122,7 +125,7 @@ impl ClockFace {
             y += h + 4;
         }
 
-        let h = Self::draw_centered_text(canvas, y, &time_str, FONT_LARGE, colors.text);
+        let h = Self::draw_centered_text(canvas, y, &time_str, time_font_size, colors.text);
         y += h + 4;
 
         if layout.show_date {
@@ -275,6 +278,12 @@ impl Face for ClockFace {
             .map(|s| s.as_str())
             .unwrap_or(date_formats::SHORT);
 
+        // Get digital time size option
+        let time_size = comp
+            .get_option(self.name(), "digital_time", complication_options::SIZE)
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(DEFAULT_TIME_SIZE);
+
         // Build layout options
         let layout = ClockLayout {
             show_hostname: is_on("hostname"),
@@ -284,7 +293,7 @@ impl Face for ClockFace {
         };
 
         if is_on("digital_time") {
-            Self::draw_digital_time(canvas, data.hour, data.minute, &layout, &colors);
+            Self::draw_digital_time(canvas, data.hour, data.minute, &layout, &colors, time_size);
         } else {
             Self::draw_analog_clock(canvas, data.hour, data.minute, &layout, &colors);
         }

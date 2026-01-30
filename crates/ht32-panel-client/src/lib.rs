@@ -175,21 +175,33 @@ impl DaemonClient {
                     .await
                     .context("Failed to connect to system bus")?
             }
-            BusType::Auto => match Connection::session().await {
-                Ok(conn) => {
-                    debug!("Connected to session bus");
-                    conn
-                }
-                Err(session_err) => {
-                    debug!(
-                        "Session bus unavailable ({}), trying system bus",
-                        session_err
-                    );
+            BusType::Auto => {
+                // Try session bus first, but verify the service exists
+                if let Ok(conn) = Connection::session().await {
+                    debug!("Connected to session bus, checking for daemon service");
+                    if Self::service_exists(&conn).await {
+                        debug!("Found daemon on session bus");
+                        conn
+                    } else {
+                        debug!("Daemon not on session bus, trying system bus");
+                        let sys_conn = Connection::system()
+                            .await
+                            .context("Failed to connect to system bus")?;
+                        if Self::service_exists(&sys_conn).await {
+                            debug!("Found daemon on system bus");
+                            sys_conn
+                        } else {
+                            // Neither bus has the service, return session for better error
+                            anyhow::bail!("Daemon service not found on session or system bus. Is ht32paneld running?")
+                        }
+                    }
+                } else {
+                    debug!("Session bus unavailable, trying system bus");
                     Connection::system()
                         .await
                         .context("Failed to connect to any D-Bus")?
                 }
-            },
+            }
         };
 
         let proxy = Daemon1Proxy::new(&connection)
@@ -197,6 +209,19 @@ impl DaemonClient {
             .context("Failed to create D-Bus proxy")?;
 
         Ok(Self { proxy })
+    }
+
+    /// Checks if the daemon service exists on the given connection.
+    async fn service_exists(conn: &Connection) -> bool {
+        use zbus::fdo::DBusProxy;
+        if let Ok(dbus_proxy) = DBusProxy::new(conn).await {
+            dbus_proxy
+                .name_has_owner("org.ht32panel.Daemon".try_into().unwrap())
+                .await
+                .unwrap_or(false)
+        } else {
+            false
+        }
     }
 
     /// Sets the display orientation.

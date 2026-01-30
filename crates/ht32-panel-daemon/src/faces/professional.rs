@@ -1,16 +1,19 @@
 //! Professional face with graphical progress bars.
 //!
-//! Layout (320x170):
+//! Landscape layout (320x170):
 //! ```text
 //! endeavour               18:45
-//! Uptime: 5d 12h 34m
-//!
-//! CPU [████████░░░░░░░░] 45%
-//! RAM [██████████░░░░░░] 67%
-//! Disk[████░░░░░░░░░░░░] R: 12 MB/s  W: 5 MB/s
-//! Net [██████░░░░░░░░░░] ↓: 1.2 MB/s ↑: 0.8 MB/s
-//!
-//! enp2s0: 192.168.1.100
+//! Up: 5d 12h 34m          2025-01-31
+//! IP:                  192.168.1.100
+//! Temp:                        45°C
+//! CPU: 45%
+//! [████████████░░░░░░░░░░░░░░░░░░]
+//! RAM: 67%
+//! [██████████████████░░░░░░░░░░░░]
+//! DSK:                   R:12M W:5M
+//! [▁▁▂▃▄▅▆▇███▇▆▅▄▃▂▁▁▁▁▁▁▁▁▁▁▁▁]
+//! NET:                 ↓:1.2M ↑:0.8M
+//! [▁▁▁▂▂▃▃▄▄▅▅▆▆▇▇████▇▇▆▆▅▅▄▄▃▃]
 //! ```
 
 use super::{
@@ -339,7 +342,10 @@ impl Face for ProfessionalFace {
                 );
             }
         } else {
-            // Landscape layout
+            // Landscape layout - labels on separate lines, wider bars below
+            let line_height = canvas.line_height(FONT_SMALL);
+            let wide_bar_width = (width - (margin * 2) as u32).min(280);
+
             // Hostname (always shown)
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
 
@@ -355,140 +361,139 @@ impl Face for ProfessionalFace {
                     colors.text,
                 );
             }
-            y += canvas.line_height(FONT_LARGE) + 2;
+            y += canvas.line_height(FONT_LARGE) + 1;
 
-            // Complication: Date (right-aligned, under time)
+            // Complication: Date (right-aligned)
             if is_enabled(complication_names::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
-                    let date_width = canvas.text_width(&date_str, FONT_NORMAL);
+                    let date_width = canvas.text_width(&date_str, FONT_SMALL);
                     canvas.draw_text(
                         width as i32 - margin - date_width,
                         y,
                         &date_str,
-                        FONT_NORMAL,
-                        colors.dim,
-                    );
-                    y += canvas.line_height(FONT_NORMAL) + 2;
-                }
-            }
-
-            // Base element: Uptime (always shown)
-            let uptime_text = format!("Uptime: {}", data.uptime);
-            canvas.draw_text(margin, y, &uptime_text, FONT_NORMAL, colors.dim);
-            y += canvas.line_height(FONT_NORMAL) + 2;
-
-            // Complication: IP address
-            if is_enabled(complication_names::IP_ADDRESS) {
-                if let Some(ref ip) = data.display_ip {
-                    canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
-                    y += canvas.line_height(FONT_SMALL) + 4;
-                } else {
-                    y += 4;
-                }
-            }
-
-            let bar_x = margin + 35;
-
-            // Base element: CPU bar with optional temperature (always shown)
-            canvas.draw_text(margin, y, "CPU", FONT_SMALL, colors.text);
-            Self::draw_progress_bar(
-                canvas,
-                bar_x,
-                y + 1,
-                BAR_WIDTH,
-                BAR_HEIGHT,
-                data.cpu_percent,
-                colors.bar_cpu,
-                colors.bar_bg,
-            );
-            let cpu_percent = format!("{:3.0}%", data.cpu_percent);
-            canvas.draw_text(
-                bar_x + BAR_WIDTH as i32 + 6,
-                y,
-                &cpu_percent,
-                FONT_SMALL,
-                colors.text,
-            );
-            // Complication: Temperature on same line (landscape)
-            if is_enabled(complication_names::CPU_TEMP) {
-                if let Some(temp) = data.cpu_temp {
-                    let temp_text = format!("{:.0}°C", temp);
-                    canvas.draw_text(
-                        bar_x + BAR_WIDTH as i32 + 50,
-                        y,
-                        &temp_text,
                         FONT_SMALL,
                         colors.dim,
                     );
                 }
             }
-            y += canvas.line_height(FONT_SMALL) + 3;
 
-            // Base element: RAM bar (always shown)
-            canvas.draw_text(margin, y, "RAM", FONT_SMALL, colors.text);
+            // Up: on its own line
+            let uptime_text = format!("Up: {}", data.uptime);
+            canvas.draw_text(margin, y, &uptime_text, FONT_SMALL, colors.dim);
+            y += line_height + 1;
+
+            // IP: on its own line
+            if is_enabled(complication_names::IP_ADDRESS) {
+                if let Some(ref ip) = data.display_ip {
+                    canvas.draw_text(margin, y, "IP:", FONT_SMALL, colors.dim);
+                    let ip_width = canvas.text_width(ip, FONT_SMALL);
+                    canvas.draw_text(
+                        width as i32 - margin - ip_width,
+                        y,
+                        ip,
+                        FONT_SMALL,
+                        colors.text,
+                    );
+                    y += line_height + 1;
+                }
+            }
+
+            // Temp: on its own line
+            if is_enabled(complication_names::CPU_TEMP) {
+                if let Some(temp) = data.cpu_temp {
+                    canvas.draw_text(margin, y, "Temp:", FONT_SMALL, colors.dim);
+                    let temp_val = format!("{:.0}°C", temp);
+                    let temp_w = canvas.text_width(&temp_val, FONT_SMALL);
+                    canvas.draw_text(
+                        width as i32 - margin - temp_w,
+                        y,
+                        &temp_val,
+                        FONT_SMALL,
+                        colors.text,
+                    );
+                    y += line_height + 1;
+                }
+            }
+
+            // CPU: label line, then bar on next line
+            let cpu_label = format!("CPU: {:3.0}%", data.cpu_percent);
+            canvas.draw_text(margin, y, &cpu_label, FONT_SMALL, colors.dim);
+            y += line_height;
             Self::draw_progress_bar(
                 canvas,
-                bar_x,
-                y + 1,
-                BAR_WIDTH,
+                margin,
+                y,
+                wide_bar_width,
+                BAR_HEIGHT,
+                data.cpu_percent,
+                colors.bar_cpu,
+                colors.bar_bg,
+            );
+            y += BAR_HEIGHT as i32 + 2;
+
+            // RAM: label line, then bar on next line
+            let ram_label = format!("RAM: {:3.0}%", data.ram_percent);
+            canvas.draw_text(margin, y, &ram_label, FONT_SMALL, colors.dim);
+            y += line_height;
+            Self::draw_progress_bar(
+                canvas,
+                margin,
+                y,
+                wide_bar_width,
                 BAR_HEIGHT,
                 data.ram_percent,
                 colors.bar_ram,
                 colors.bar_bg,
             );
-            let ram_percent = format!("{:3.0}%", data.ram_percent);
-            canvas.draw_text(
-                bar_x + BAR_WIDTH as i32 + 6,
-                y,
-                &ram_percent,
-                FONT_SMALL,
-                colors.text,
-            );
-            y += canvas.line_height(FONT_SMALL) + 3;
+            y += BAR_HEIGHT as i32 + 2;
 
-            // Complication: Disk I/O graph
+            // DSK: label line, then graph on next line
             if is_enabled(complication_names::DISK_IO) {
                 let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
                 let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
-                canvas.draw_text(margin, y, "DSK", FONT_SMALL, colors.text);
+                canvas.draw_text(margin, y, "DSK:", FONT_SMALL, colors.dim);
+                let disk_rates = format!("R:{} W:{}", disk_r, disk_w);
+                let disk_rates_w = canvas.text_width(&disk_rates, FONT_SMALL);
                 canvas.draw_text(
-                    bar_x + BAR_WIDTH as i32 + 6,
+                    width as i32 - margin - disk_rates_w,
                     y,
-                    &format!("R:{} W:{}", disk_r, disk_w),
+                    &disk_rates,
                     FONT_SMALL,
-                    colors.dim,
+                    colors.text,
                 );
-                y += canvas.line_height(FONT_SMALL) + 1;
+                y += line_height;
                 canvas.draw_graph(
                     margin,
                     y,
-                    width - (margin * 2) as u32,
+                    wide_bar_width,
                     GRAPH_HEIGHT,
                     &data.disk_history,
                     SystemData::compute_graph_scale(&data.disk_history),
                     colors.bar_disk,
                     colors.bar_bg,
                 );
-                y += GRAPH_HEIGHT as i32 + 3;
+                y += GRAPH_HEIGHT as i32 + 2;
             }
 
-            // Complication: Network I/O graph
+            // NET: label line, then graph on next line
             if is_enabled(complication_names::NETWORK) {
                 let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
                 let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
-                canvas.draw_text(margin, y, "NET", FONT_SMALL, colors.text);
+                canvas.draw_text(margin, y, "NET:", FONT_SMALL, colors.dim);
+                let net_rates = format!("\u{2193}:{} \u{2191}:{}", net_rx, net_tx);
+                let net_rates_w = canvas.text_width(&net_rates, FONT_SMALL);
                 canvas.draw_text(
-                    bar_x + BAR_WIDTH as i32 + 6,
+                    width as i32 - margin - net_rates_w,
                     y,
-                    &format!("\u{2193}:{} \u{2191}:{}", net_rx, net_tx),
+                    &net_rates,
                     FONT_SMALL,
-                    colors.dim,
+                    colors.text,
                 );
-                y += canvas.line_height(FONT_SMALL) + 1;
+                y += line_height;
                 canvas.draw_graph(
                     margin,
                     y,
-                    width - (margin * 2) as u32,
+                    wide_bar_width,
                     GRAPH_HEIGHT,
                     &data.net_history,
                     SystemData::compute_graph_scale(&data.net_history),

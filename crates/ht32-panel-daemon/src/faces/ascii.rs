@@ -1,16 +1,33 @@
 //! ASCII text-only face with ASCII art graphs.
 //!
-//! Layout (320x170):
+//! Portrait layout (135x240):
+//! ```text
+//! endeavour         18:45
+//! Up: 5d 12h 34m    2025-01-31
+//! IP:
+//! 192.168.1.100
+//! Temp:                  45°C
+//! CPU: 45%
+//! [########...............]
+//! RAM: 67%
+//! [##########..............]
+//! DSK:             R:12M W:5M
+//! [_._.-=+*##*+=-._.____..]
+//! NET:           D:1.2M U:0.8M
+//! [__..--==++**##**++==..]
+//! ```
+//!
+//! Landscape layout (320x170):
 //! ```text
 //! endeavour               18:45
 //! Up: 5d 12h 34m
-//!
+//! IP: 192.168.1.100
 //! CPU [########........] 45%
 //! RAM [##########......] 67%
-//! Disk[####............]  R:12M W:5M
-//! Net [######..........]  D:1.2M U:0.8M
-//!
-//! enp2s0: 192.168.1.100
+//! DSK  R:12M W:5M
+//! [_._.-=+*##*+=-._.____..]
+//! NET  D:1.2M U:0.8M
+//! [__..--==++**##**++==..]
 //! ```
 
 use super::{
@@ -70,9 +87,6 @@ const FONT_LARGE: f32 = 16.0;
 const FONT_NORMAL: f32 = 14.0;
 const FONT_SMALL: f32 = 12.0;
 
-/// Graph dimensions.
-const GRAPH_HEIGHT: u32 = 14;
-
 /// Creates an ASCII progress bar string.
 /// Returns something like "[########........]"
 fn ascii_bar(percent: f64, width: usize) -> String {
@@ -80,6 +94,39 @@ fn ascii_bar(percent: f64, width: usize) -> String {
     let filled = filled.min(width);
     let empty = width - filled;
     format!("[{}{}]", "#".repeat(filled), ".".repeat(empty))
+}
+
+/// Creates an ASCII sparkline from historical data.
+/// Uses ASCII characters to represent different heights:
+/// `_` (lowest), `.`, `-`, `=`, `+`, `*`, `#` (highest)
+fn ascii_sparkline(data: &std::collections::VecDeque<f64>, max_value: f64, width: usize) -> String {
+    const CHARS: [char; 7] = ['_', '.', '-', '=', '+', '*', '#'];
+
+    if data.is_empty() || max_value <= 0.0 {
+        return "_".repeat(width);
+    }
+
+    // Sample data to fit width
+    let num_points = data.len();
+    let mut result = String::with_capacity(width);
+
+    for i in 0..width {
+        // Map output position to data index
+        let data_idx = if width <= num_points {
+            // More data than width: sample from recent data
+            num_points - width + i
+        } else {
+            // Less data than width: stretch or pad
+            (i * num_points) / width
+        };
+
+        let value = data.get(data_idx).copied().unwrap_or(0.0);
+        let normalized = (value / max_value).clamp(0.0, 1.0);
+        let level = (normalized * (CHARS.len() - 1) as f64).round() as usize;
+        result.push(CHARS[level.min(CHARS.len() - 1)]);
+    }
+
+    result
 }
 
 /// A text-only ASCII face.
@@ -151,7 +198,11 @@ impl Face for AsciiFace {
             .unwrap_or(date_formats::ISO);
 
         if portrait {
-            // Portrait layout
+            // Portrait layout - labels on separate lines, wider graphs
+            let line_height = canvas.line_height(FONT_SMALL);
+            // Calculate bar width to fill most of the line (leave margin on each side)
+            let bar_width = ((width as i32 - margin * 2) / 7).max(12) as usize; // ~7 pixels per char
+
             // Hostname (always shown)
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
 
@@ -169,7 +220,7 @@ impl Face for AsciiFace {
             }
             y += canvas.line_height(FONT_LARGE) + 1;
 
-            // Complication: Date (right-aligned, under time)
+            // Complication: Date (right-aligned)
             if is_enabled(complication_names::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
                     let date_width = canvas.text_width(&date_str, FONT_SMALL);
@@ -183,101 +234,111 @@ impl Face for AsciiFace {
                 }
             }
 
-            // Base element: Uptime (always shown, same line as date on left)
+            // Up: on its own line
             let uptime_text = format!("Up: {}", data.uptime);
             canvas.draw_text(margin, y, &uptime_text, FONT_SMALL, colors.dim);
-            y += canvas.line_height(FONT_SMALL) + 1;
+            y += line_height + 1;
 
-            // Complication: IP address
+            // IP: on its own line
             if is_enabled(complication_names::IP_ADDRESS) {
                 if let Some(ref ip) = data.display_ip {
+                    canvas.draw_text(margin, y, "IP:", FONT_SMALL, colors.dim);
+                    y += line_height;
+                    // IP value on next line, possibly split for IPv6
                     let max_width = width as i32 - margin * 2;
                     let ip_width = canvas.text_width(ip, FONT_SMALL);
                     if ip_width > max_width && ip.contains(':') {
                         let mid = ip.len() / 2;
                         let split_pos = ip[..mid].rfind(':').map(|p| p + 1).unwrap_or(mid);
                         let (first, second) = ip.split_at(split_pos);
-                        canvas.draw_text(margin, y, first, FONT_SMALL, colors.dim);
-                        y += canvas.line_height(FONT_SMALL);
-                        canvas.draw_text(margin, y, second, FONT_SMALL, colors.dim);
-                        y += canvas.line_height(FONT_SMALL) + 1;
+                        canvas.draw_text(margin, y, first, FONT_SMALL, colors.text);
+                        y += line_height;
+                        canvas.draw_text(margin, y, second, FONT_SMALL, colors.text);
                     } else {
-                        canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
-                        y += canvas.line_height(FONT_SMALL) + 1;
+                        canvas.draw_text(margin, y, ip, FONT_SMALL, colors.text);
                     }
+                    y += line_height + 1;
                 }
             }
 
-            // Complication: CPU temperature
+            // Temp: on its own line
             if is_enabled(complication_names::CPU_TEMP) {
                 if let Some(temp) = data.cpu_temp {
-                    let temp_text = format!("Temp: {:.0}°C", temp);
-                    canvas.draw_text(margin, y, &temp_text, FONT_SMALL, colors.dim);
-                    y += canvas.line_height(FONT_SMALL) + 2;
-                } else {
-                    y += 2;
+                    canvas.draw_text(margin, y, "Temp:", FONT_SMALL, colors.dim);
+                    let temp_val = format!("{:.0}°C", temp);
+                    let temp_w = canvas.text_width(&temp_val, FONT_SMALL);
+                    canvas.draw_text(
+                        width as i32 - margin - temp_w,
+                        y,
+                        &temp_val,
+                        FONT_SMALL,
+                        colors.text,
+                    );
+                    y += line_height + 1;
                 }
             }
 
-            // Base element: CPU bar (always shown)
-            let cpu_bar = ascii_bar(data.cpu_percent, bar_chars);
-            let cpu_text = format!("CPU {} {:2.0}%", cpu_bar, data.cpu_percent);
-            canvas.draw_text(margin, y, &cpu_text, FONT_SMALL, colors.text);
-            y += canvas.line_height(FONT_SMALL) + 1;
+            // CPU: label line, then bar on next line
+            let cpu_label = format!("CPU: {:2.0}%", data.cpu_percent);
+            canvas.draw_text(margin, y, &cpu_label, FONT_SMALL, colors.dim);
+            y += line_height;
+            let cpu_bar = ascii_bar(data.cpu_percent, bar_width);
+            canvas.draw_text(margin, y, &cpu_bar, FONT_SMALL, colors.text);
+            y += line_height + 1;
 
-            // Base element: RAM bar (always shown)
-            let ram_bar = ascii_bar(data.ram_percent, bar_chars);
-            let ram_text = format!("RAM {} {:2.0}%", ram_bar, data.ram_percent);
-            canvas.draw_text(margin, y, &ram_text, FONT_SMALL, colors.text);
-            y += canvas.line_height(FONT_SMALL) + 2;
+            // RAM: label line, then bar on next line
+            let ram_label = format!("RAM: {:2.0}%", data.ram_percent);
+            canvas.draw_text(margin, y, &ram_label, FONT_SMALL, colors.dim);
+            y += line_height;
+            let ram_bar = ascii_bar(data.ram_percent, bar_width);
+            canvas.draw_text(margin, y, &ram_bar, FONT_SMALL, colors.text);
+            y += line_height + 1;
 
-            // Complication: Disk I/O
+            // DSK: label line, then sparkline on next line
             if is_enabled(complication_names::DISK_IO) {
                 let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
                 let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
+                canvas.draw_text(margin, y, "DSK:", FONT_SMALL, colors.dim);
+                let disk_rates = format!("R:{} W:{}", disk_r, disk_w);
+                let disk_rates_w = canvas.text_width(&disk_rates, FONT_SMALL);
                 canvas.draw_text(
-                    margin,
+                    width as i32 - margin - disk_rates_w,
                     y,
-                    &format!("DSK R:{} W:{}", disk_r, disk_w),
+                    &disk_rates,
                     FONT_SMALL,
                     colors.text,
                 );
-                y += canvas.line_height(FONT_SMALL);
-                canvas.draw_graph(
-                    margin,
-                    y,
-                    width - (margin * 2) as u32,
-                    GRAPH_HEIGHT,
+                y += line_height;
+                let sparkline = ascii_sparkline(
                     &data.disk_history,
                     SystemData::compute_graph_scale(&data.disk_history),
-                    colors.bar_disk,
-                    colors.bar_bg,
+                    bar_width,
                 );
-                y += GRAPH_HEIGHT as i32 + 2;
+                canvas.draw_text(margin, y, &format!("[{}]", sparkline), FONT_SMALL, colors.bar_disk);
+                y += line_height + 1;
             }
 
-            // Complication: Network
+            // NET: label line, then sparkline on next line
             if is_enabled(complication_names::NETWORK) {
                 let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
                 let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
+                canvas.draw_text(margin, y, "NET:", FONT_SMALL, colors.dim);
+                let net_rates = format!("D:{} U:{}", net_rx, net_tx);
+                let net_rates_w = canvas.text_width(&net_rates, FONT_SMALL);
                 canvas.draw_text(
-                    margin,
+                    width as i32 - margin - net_rates_w,
                     y,
-                    &format!("NET D:{} U:{}", net_rx, net_tx),
+                    &net_rates,
                     FONT_SMALL,
                     colors.text,
                 );
-                y += canvas.line_height(FONT_SMALL);
-                canvas.draw_graph(
-                    margin,
-                    y,
-                    width - (margin * 2) as u32,
-                    GRAPH_HEIGHT,
+                y += line_height;
+                let sparkline = ascii_sparkline(
                     &data.net_history,
                     SystemData::compute_graph_scale(&data.net_history),
-                    colors.bar_net,
-                    colors.bar_bg,
+                    bar_width,
                 );
+                canvas.draw_text(margin, y, &format!("[{}]", sparkline), FONT_SMALL, colors.bar_net);
             }
         } else {
             // Landscape layout
@@ -320,7 +381,7 @@ impl Face for AsciiFace {
             // Complication: IP address
             if is_enabled(complication_names::IP_ADDRESS) {
                 if let Some(ref ip) = data.display_ip {
-                    canvas.draw_text(margin, y, ip, FONT_SMALL, colors.dim);
+                    canvas.draw_text(margin, y, &format!("IP: {}", ip), FONT_SMALL, colors.dim);
                     y += canvas.line_height(FONT_SMALL) + 4;
                 } else {
                     y += 4;
@@ -360,17 +421,13 @@ impl Face for AsciiFace {
                     colors.dim,
                 );
                 y += canvas.line_height(FONT_NORMAL);
-                canvas.draw_graph(
-                    margin,
-                    y,
-                    width - (margin * 2) as u32,
-                    GRAPH_HEIGHT,
+                let sparkline = ascii_sparkline(
                     &data.disk_history,
                     SystemData::compute_graph_scale(&data.disk_history),
-                    colors.bar_disk,
-                    colors.bar_bg,
+                    bar_chars + 20,
                 );
-                y += GRAPH_HEIGHT as i32 + 2;
+                canvas.draw_text(margin, y, &format!("[{}]", sparkline), FONT_NORMAL, colors.bar_disk);
+                y += canvas.line_height(FONT_NORMAL) + 2;
             }
 
             // Complication: Network
@@ -386,16 +443,12 @@ impl Face for AsciiFace {
                     colors.dim,
                 );
                 y += canvas.line_height(FONT_NORMAL);
-                canvas.draw_graph(
-                    margin,
-                    y,
-                    width - (margin * 2) as u32,
-                    GRAPH_HEIGHT,
+                let sparkline = ascii_sparkline(
                     &data.net_history,
                     SystemData::compute_graph_scale(&data.net_history),
-                    colors.bar_net,
-                    colors.bar_bg,
+                    bar_chars + 20,
                 );
+                canvas.draw_text(margin, y, &format!("[{}]", sparkline), FONT_NORMAL, colors.bar_net);
             }
         }
         let _ = y;
