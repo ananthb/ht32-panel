@@ -87,13 +87,8 @@ impl Theme {
                 text: 0xE0E0FF,      // Brighter foreground
                 background: 0x1A1B26,
             },
-            _ => Self {
-                // Default - cyan/coral on dark blue-gray, high contrast
-                primary: 0x00FFFF,   // Bright cyan
-                secondary: 0xFF6B6B, // Coral
-                text: 0xFFFFFF,      // Pure white
-                background: 0x1A1A2E,
-            },
+            // Unknown theme - fall back to nord
+            _ => Self::from_preset("nord"),
         }
     }
 }
@@ -101,12 +96,11 @@ impl Theme {
 /// Returns a list of available theme preset names.
 pub fn available_themes() -> Vec<&'static str> {
     vec![
-        "default",
         "ember",
         "hacker",
-        "solarized-light",
-        "solarized-dark",
         "nord",
+        "solarized-dark",
+        "solarized-light",
         "tokyonight",
     ]
 }
