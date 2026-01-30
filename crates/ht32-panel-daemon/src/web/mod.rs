@@ -4,13 +4,21 @@ use askama::Template;
 use axum::{
     extract::{Form, State},
     http::{header, StatusCode},
-    response::{Html, IntoResponse, Response},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        Html, IntoResponse, Response,
+    },
     routing::{get, post},
     Router,
 };
 use serde::Deserialize;
+use std::convert::Infallible;
 use std::sync::Arc;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::{Stream, StreamExt};
 
+use crate::dbus::DaemonSignals;
 use crate::faces::{
     available_faces, available_themes, complication_names, complication_options,
     ComplicationOptionType,
@@ -124,13 +132,27 @@ struct ComplicationsTemplate {
     complications: Vec<ComplicationItem>,
 }
 
+/// Shared state for the web server including signal channel.
+#[derive(Clone)]
+pub struct WebState {
+    pub app: Arc<AppState>,
+    pub signal_tx: broadcast::Sender<DaemonSignals>,
+}
+
 /// Creates the web router with all routes.
-pub fn create_router(state: Arc<AppState>) -> Router {
+pub fn create_router(state: Arc<AppState>, signal_tx: broadcast::Sender<DaemonSignals>) -> Router {
+    let web_state = WebState {
+        app: state,
+        signal_tx,
+    };
+
     Router::new()
         // Main page
         .route("/", get(index))
         // LCD preview image
         .route("/lcd.png", get(lcd_png))
+        // Server-Sent Events for live updates
+        .route("/events", get(events_stream))
         // Partials for HTMX
         .route("/status", get(status))
         .route("/orientation", get(orientation_get).post(orientation_set))
@@ -145,7 +167,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/preview", get(preview_get))
         .route("/refresh-interval", post(refresh_interval_set))
         // State
-        .with_state(state)
+        .with_state(web_state)
 }
 
 /// GET / - Main page
@@ -153,9 +175,32 @@ async fn index() -> impl IntoResponse {
     Html(IndexTemplate.render().unwrap())
 }
 
+/// GET /events - Server-Sent Events stream for live updates
+async fn events_stream(
+    State(state): State<WebState>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let rx = state.signal_tx.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(|result| {
+        match result {
+            Ok(signal) => {
+                let event_type = match signal {
+                    DaemonSignals::OrientationChanged => "orientation",
+                    DaemonSignals::LedChanged => "led",
+                    DaemonSignals::DisplaySettingsChanged => "display",
+                    DaemonSignals::ComplicationOptionChanged => "complication",
+                };
+                Some(Ok(Event::default().event(event_type).data("reload")))
+            }
+            Err(_) => None, // Skip lagged messages
+        }
+    });
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
 /// GET /lcd.png - LCD framebuffer as PNG
-async fn lcd_png(State(state): State<Arc<AppState>>) -> Response {
-    match state.get_screen_png() {
+async fn lcd_png(State(state): State<WebState>) -> Response {
+    match state.app.get_screen_png() {
         Ok(png_data) => (
             StatusCode::OK,
             [
@@ -174,14 +219,14 @@ async fn lcd_png(State(state): State<Arc<AppState>>) -> Response {
 }
 
 /// GET /status - Connection status partial
-async fn status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let connected = state.is_lcd_connected();
+async fn status(State(state): State<WebState>) -> impl IntoResponse {
+    let connected = state.app.is_lcd_connected();
     Html(StatusTemplate { connected }.render().unwrap())
 }
 
 /// GET /orientation - Orientation controls partial
-async fn orientation_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let current = state.orientation().to_string();
+async fn orientation_get(State(state): State<WebState>) -> impl IntoResponse {
+    let current = state.app.orientation().to_string();
     Html(OrientationTemplate { current }.render().unwrap())
 }
 
@@ -193,19 +238,19 @@ struct OrientationForm {
 
 /// POST /orientation - Set orientation
 async fn orientation_set(
-    State(state): State<Arc<AppState>>,
+    State(state): State<WebState>,
     Form(form): Form<OrientationForm>,
 ) -> impl IntoResponse {
     if let Ok(orientation) = form.orientation.parse::<Orientation>() {
-        let _ = state.set_orientation(orientation);
+        let _ = state.app.set_orientation(orientation);
     }
-    let current = state.orientation().to_string();
+    let current = state.app.orientation().to_string();
     Html(OrientationTemplate { current }.render().unwrap())
 }
 
 /// GET /face - Face controls partial
-async fn face_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let current = state.face_name();
+async fn face_get(State(state): State<WebState>) -> impl IntoResponse {
+    let current = state.app.face_name();
     let faces: Vec<FaceOption> = available_faces()
         .iter()
         .map(|f| FaceOption {
@@ -223,12 +268,9 @@ struct FaceForm {
 }
 
 /// POST /face - Set face
-async fn face_set(
-    State(state): State<Arc<AppState>>,
-    Form(form): Form<FaceForm>,
-) -> impl IntoResponse {
-    let _ = state.set_face(&form.face);
-    let current = state.face_name();
+async fn face_set(State(state): State<WebState>, Form(form): Form<FaceForm>) -> impl IntoResponse {
+    let _ = state.app.set_face(&form.face);
+    let current = state.app.face_name();
     let faces: Vec<FaceOption> = available_faces()
         .iter()
         .map(|f| FaceOption {
@@ -240,8 +282,8 @@ async fn face_set(
 }
 
 /// GET /led - LED controls partial
-async fn led_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let (theme, intensity, speed) = state.led_settings();
+async fn led_get(State(state): State<WebState>) -> impl IntoResponse {
+    let (theme, intensity, speed) = state.app.led_settings();
     Html(
         LedTemplate {
             theme,
@@ -269,15 +311,12 @@ fn default_led() -> u8 {
 }
 
 /// POST /led - Set LED settings
-async fn led_set(
-    State(state): State<Arc<AppState>>,
-    Form(form): Form<LedForm>,
-) -> impl IntoResponse {
+async fn led_set(State(state): State<WebState>, Form(form): Form<LedForm>) -> impl IntoResponse {
     let theme = form.theme.clamp(1, 5);
     let intensity = form.intensity.clamp(1, 5);
     let speed = form.speed.clamp(1, 5);
 
-    let error = match state.set_led(theme, intensity, speed).await {
+    let error = match state.app.set_led(theme, intensity, speed).await {
         Ok(()) => None,
         Err(e) => {
             tracing::error!("Failed to set LED: {}", e);
@@ -285,7 +324,7 @@ async fn led_set(
         }
     };
 
-    let (theme, intensity, speed) = state.led_settings();
+    let (theme, intensity, speed) = state.app.led_settings();
     Html(
         LedTemplate {
             theme,
@@ -299,8 +338,8 @@ async fn led_set(
 }
 
 /// GET /theme - Theme controls partial
-async fn theme_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let current = state.theme_name();
+async fn theme_get(State(state): State<WebState>) -> impl IntoResponse {
+    let current = state.app.theme_name();
     let themes: Vec<ThemeOption> = available_themes()
         .iter()
         .map(|t| ThemeOption {
@@ -319,11 +358,11 @@ struct ThemeForm {
 
 /// POST /theme - Set theme
 async fn theme_set(
-    State(state): State<Arc<AppState>>,
+    State(state): State<WebState>,
     Form(form): Form<ThemeForm>,
 ) -> impl IntoResponse {
-    let _ = state.set_theme(&form.theme);
-    let current = state.theme_name();
+    let _ = state.app.set_theme(&form.theme);
+    let current = state.app.theme_name();
     let themes: Vec<ThemeOption> = available_themes()
         .iter()
         .map(|t| ThemeOption {
@@ -351,19 +390,19 @@ struct RefreshIntervalForm {
 
 /// POST /refresh-interval - Set LCD refresh interval in milliseconds
 async fn refresh_interval_set(
-    State(state): State<Arc<AppState>>,
+    State(state): State<WebState>,
     Form(form): Form<RefreshIntervalForm>,
 ) -> impl IntoResponse {
-    state.set_refresh_interval_ms(form.interval);
+    state.app.set_refresh_interval_ms(form.interval);
     StatusCode::OK
 }
 
 /// GET /complications - Complications controls partial
-async fn complications_get(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let face_name = state.face_name();
-    let available = state.available_complications();
-    let enabled = state.enabled_complications();
-    let interfaces = state.list_network_interfaces();
+async fn complications_get(State(state): State<WebState>) -> impl IntoResponse {
+    let face_name = state.app.face_name();
+    let available = state.app.available_complications();
+    let enabled = state.app.enabled_complications();
+    let interfaces = state.app.list_network_interfaces();
 
     let complications: Vec<ComplicationItem> = available
         .into_iter()
@@ -373,6 +412,7 @@ async fn complications_get(State(state): State<Arc<AppState>>) -> impl IntoRespo
                 .iter()
                 .map(|opt| {
                     let current_value = state
+                        .app
                         .get_complication_option(&c.id, &opt.id)
                         .unwrap_or_else(|| opt.default_value.clone());
 
@@ -475,14 +515,16 @@ struct ComplicationForm {
 
 /// POST /complications - Toggle a complication
 async fn complications_set(
-    State(state): State<Arc<AppState>>,
+    State(state): State<WebState>,
     Form(form): Form<ComplicationForm>,
 ) -> impl IntoResponse {
     let enabled = form.enabled.as_deref() == Some("on");
-    let _ = state.set_complication_enabled(&form.complication, enabled);
+    let _ = state
+        .app
+        .set_complication_enabled(&form.complication, enabled);
 
     // Re-render the complications list
-    render_complications(&state)
+    render_complications(&state.app)
 }
 
 /// Form data for complication option.
@@ -495,13 +537,15 @@ struct ComplicationOptionForm {
 
 /// POST /complication-option - Set a complication option value
 async fn complication_option_set(
-    State(state): State<Arc<AppState>>,
+    State(state): State<WebState>,
     Form(form): Form<ComplicationOptionForm>,
 ) -> impl IntoResponse {
-    let _ = state.set_complication_option(&form.complication, &form.option, &form.value);
+    let _ = state
+        .app
+        .set_complication_option(&form.complication, &form.option, &form.value);
 
     // Re-render the complications list
-    render_complications(&state)
+    render_complications(&state.app)
 }
 
 /// Helper to render the complications template

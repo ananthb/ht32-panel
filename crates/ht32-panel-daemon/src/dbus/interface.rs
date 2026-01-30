@@ -91,6 +91,7 @@ impl Daemon1Interface {
             .set_face(face)
             .map_err(|e| zbus::fdo::Error::InvalidArgs(e.to_string()))?;
 
+        let _ = self.signal_tx.send(DaemonSignals::DisplaySettingsChanged);
         debug!("D-Bus: SetFace({})", face);
         Ok(())
     }

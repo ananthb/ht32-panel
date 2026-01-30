@@ -29,3 +29,5 @@ zbus = { workspace = true }
 askama = { workspace = true }
 libc = { workspace = true }
 chrono = "0.4.43"
+futures = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }

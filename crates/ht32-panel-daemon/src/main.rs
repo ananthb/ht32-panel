@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
 
     // Optionally start web server
     if config.web.enable {
-        let app = web::create_router(state.clone());
+        let app = web::create_router(state.clone(), signal_tx.clone());
         let addr: SocketAddr = config
             .web
             .listen

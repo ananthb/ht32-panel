@@ -7,8 +7,11 @@
     </div>
 </div>
 
-<div class="card preview">
+<div class="card preview" id="preview-card">
     <h2>Display Preview</h2>
+    <div id="preview-loading" class="loading-overlay" style="display: none;">
+        <span class="spinner" style="width: 2em; height: 2em;"></span>
+    </div>
     <img id="lcd-preview" src="/lcd.png" alt="LCD Preview">
     <div class="refresh-controls">
         <label>Refresh Interval: <span id="refresh-value">2000</span>ms</label>
@@ -20,12 +23,38 @@
     const img = document.getElementById('lcd-preview');
     const slider = document.getElementById('refresh-slider');
     const label = document.getElementById('refresh-value');
+    const loading = document.getElementById('preview-loading');
     let intervalId = null;
+    let pendingRefresh = false;
+
+    function showLoading() {
+        loading.style.display = 'flex';
+    }
+
+    function hideLoading() {
+        loading.style.display = 'none';
+    }
 
     function refresh() {
         const next = new Image();
-        next.onload = () => { img.src = next.src; };
+        next.onload = () => {
+            img.src = next.src;
+            hideLoading();
+            pendingRefresh = false;
+        };
+        next.onerror = () => {
+            hideLoading();
+            pendingRefresh = false;
+        };
         next.src = '/lcd.png?t=' + Date.now();
+    }
+
+    function refreshAfterChange() {
+        if (pendingRefresh) return;
+        pendingRefresh = true;
+        showLoading();
+        // Small delay to let the server process the change
+        setTimeout(refresh, 100);
     }
 
     function start(ms) {
@@ -37,6 +66,54 @@
     slider.oninput = function() {
         label.textContent = this.value;
         start(parseInt(this.value));
+    };
+
+    // Listen for HTMX requests to show loading on preview
+    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+        const target = evt.detail.elt;
+        // Check if this is a display-related form
+        if (target.closest('#orientation, #theme-controls, #face-controls, #complications-controls, #led-controls')) {
+            showLoading();
+        }
+    });
+
+    document.body.addEventListener('htmx:afterSettle', function(evt) {
+        const target = evt.detail.elt;
+        // Refresh preview after display-related changes
+        if (target.closest('#orientation, #theme-controls, #face-controls, #complications-controls')) {
+            refreshAfterChange();
+        }
+    });
+
+    // Server-Sent Events for D-Bus changes
+    const evtSource = new EventSource('/events');
+
+    evtSource.addEventListener('orientation', function(e) {
+        htmx.trigger('#orientation', 'load');
+        refreshAfterChange();
+    });
+
+    evtSource.addEventListener('display', function(e) {
+        htmx.trigger('#theme-controls', 'load');
+        htmx.trigger('#face-controls', 'load');
+        htmx.trigger('#complications-controls', 'reload');
+        refreshAfterChange();
+    });
+
+    evtSource.addEventListener('complication', function(e) {
+        htmx.trigger('#complications-controls', 'reload');
+        refreshAfterChange();
+    });
+
+    evtSource.addEventListener('led', function(e) {
+        htmx.trigger('#led-controls', 'load');
+    });
+
+    evtSource.onerror = function() {
+        // Reconnect after a delay if connection is lost
+        setTimeout(function() {
+            evtSource.close();
+        }, 5000);
     };
 
     start(2000);
