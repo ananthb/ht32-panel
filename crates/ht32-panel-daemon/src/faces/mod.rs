@@ -224,8 +224,8 @@ impl Complication {
     }
 }
 
-/// Standard complication IDs used across faces.
-pub mod complications {
+/// Complication IDs used across faces.
+pub mod complication_names {
     pub const TIME: &str = "time";
     pub const DATE: &str = "date";
     pub const NETWORK: &str = "network";
@@ -234,7 +234,7 @@ pub mod complications {
     pub const IP_ADDRESS: &str = "ip_address";
 }
 
-/// Standard complication option IDs.
+/// Complication option IDs.
 pub mod complication_options {
     pub const TIME_FORMAT: &str = "format";
     pub const DATE_FORMAT: &str = "format";
@@ -257,6 +257,135 @@ pub mod date_formats {
     pub const SHORT: &str = "short"; // Jan 15
     pub const LONG: &str = "long"; // January 15, 2024
     pub const WEEKDAY: &str = "weekday"; // Mon, Jan 15
+}
+
+/// Pre-built complications used across faces.
+pub mod complications {
+    use super::*;
+
+    /// Time complication with format options.
+    pub fn time(default_enabled: bool) -> Complication {
+        Complication::with_options(
+            complication_names::TIME,
+            "Time",
+            "Display the current time",
+            default_enabled,
+            vec![ComplicationOption::choice(
+                complication_options::TIME_FORMAT,
+                "Format",
+                "Time display format",
+                vec![
+                    ComplicationChoice::new(time_formats::DIGITAL_24H, "Digital (24h)"),
+                    ComplicationChoice::new(time_formats::DIGITAL_12H, "Digital (12h)"),
+                    ComplicationChoice::new(time_formats::ANALOGUE, "Analogue"),
+                ],
+                time_formats::DIGITAL_24H,
+            )],
+        )
+    }
+
+    /// Date complication with format options.
+    pub fn date(default_enabled: bool, default_format: &str) -> Complication {
+        Complication::with_options(
+            complication_names::DATE,
+            "Date",
+            "Display the current date",
+            default_enabled,
+            vec![ComplicationOption::choice(
+                complication_options::DATE_FORMAT,
+                "Format",
+                "Date display format",
+                vec![
+                    ComplicationChoice::new(date_formats::ISO, "ISO (2024-01-15)"),
+                    ComplicationChoice::new(date_formats::US, "US (01/15/2024)"),
+                    ComplicationChoice::new(date_formats::EU, "EU (15/01/2024)"),
+                    ComplicationChoice::new(date_formats::SHORT, "Short (Jan 15)"),
+                    ComplicationChoice::new(date_formats::LONG, "Long (January 15, 2024)"),
+                    ComplicationChoice::new(date_formats::WEEKDAY, "Weekday (Mon, Jan 15)"),
+                ],
+                default_format,
+            )],
+        )
+    }
+
+    /// IP address complication with type options.
+    pub fn ip_address(default_enabled: bool) -> Complication {
+        Complication::with_options(
+            complication_names::IP_ADDRESS,
+            "IP Address",
+            "Display network IP address",
+            default_enabled,
+            vec![ComplicationOption::choice(
+                complication_options::IP_TYPE,
+                "IP Type",
+                "Type of IP address to display",
+                vec![
+                    ComplicationChoice::new("ipv6-gua", "IPv6 Global"),
+                    ComplicationChoice::new("ipv6-lla", "IPv6 Link-Local"),
+                    ComplicationChoice::new("ipv6-ula", "IPv6 ULA"),
+                    ComplicationChoice::new("ipv4", "IPv4"),
+                ],
+                "ipv6-gua",
+            )],
+        )
+    }
+
+    /// Network activity complication with interface options.
+    pub fn network(default_enabled: bool) -> Complication {
+        Complication::with_options(
+            complication_names::NETWORK,
+            "Network",
+            "Display network activity graph",
+            default_enabled,
+            vec![ComplicationOption::choice(
+                complication_options::INTERFACE,
+                "Interface",
+                "Network interface to monitor",
+                vec![ComplicationChoice::new("auto", "Auto-detect")],
+                "auto",
+            )],
+        )
+    }
+
+    /// Disk I/O complication.
+    pub fn disk_io(default_enabled: bool) -> Complication {
+        Complication::new(
+            complication_names::DISK_IO,
+            "Disk I/O",
+            "Display disk read/write activity graph",
+            default_enabled,
+        )
+    }
+
+    /// CPU temperature complication.
+    pub fn cpu_temp(default_enabled: bool) -> Complication {
+        Complication::new(
+            complication_names::CPU_TEMP,
+            "CPU Temperature",
+            "Display CPU temperature",
+            default_enabled,
+        )
+    }
+
+    /// Hostname complication.
+    pub fn hostname(default_enabled: bool) -> Complication {
+        Complication::new(
+            "hostname",
+            "Hostname",
+            "Display the system hostname",
+            default_enabled,
+        )
+    }
+
+    /// Digital time complication (replaces analog clock).
+    pub fn digital_time(default_enabled: bool) -> Complication {
+        Complication::new(
+            "digital_time",
+            "Digital Time",
+            "Display the current time in digital format",
+            default_enabled,
+        )
+    }
 }
 
 /// Configuration for a single complication instance.

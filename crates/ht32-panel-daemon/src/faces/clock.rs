@@ -6,8 +6,8 @@
 use std::f32::consts::PI;
 
 use super::{
-    complication_options, complications, date_formats, Complication, ComplicationChoice,
-    ComplicationOption, EnabledComplications, Face, Theme,
+    complication_names, complication_options, complications, date_formats, Complication,
+    EnabledComplications, Face, Theme,
 };
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
@@ -58,11 +58,20 @@ impl FaceColors {
 }
 
 /// Font sizes.
+const FONT_LARGE: f32 = 32.0;
 const FONT_NORMAL: f32 = 14.0;
 const FONT_SMALL: f32 = 12.0;
 
 /// A minimalist analog clock face.
 pub struct ClockFace;
+
+/// Display options for the clock face.
+struct ClockLayout {
+    show_hostname: bool,
+    show_date: bool,
+    hostname: String,
+    date: Option<String>,
+}
 
 impl ClockFace {
     /// Creates a new clock face.
@@ -70,8 +79,100 @@ impl ClockFace {
         Self
     }
 
-    /// Draws an analog clock.
+    /// Draws centered text and returns its height.
+    fn draw_centered_text(
+        canvas: &mut Canvas,
+        y: i32,
+        text: &str,
+        font_size: f32,
+        color: u32,
+    ) -> i32 {
+        let (width, _) = canvas.dimensions();
+        let text_width = canvas.text_width(text, font_size);
+        let x = (width as i32 - text_width) / 2;
+        canvas.draw_text(x, y, text, font_size, color);
+        canvas.line_height(font_size)
+    }
+
+    /// Draws a digital time display with optional hostname and date.
+    fn draw_digital_time(
+        canvas: &mut Canvas,
+        hour: u8,
+        minute: u8,
+        layout: &ClockLayout,
+        colors: &FaceColors,
+    ) {
+        let (_, height) = canvas.dimensions();
+        let time_str = format!("{:02}:{:02}", hour, minute);
+
+        // Calculate total height needed
+        let time_height = canvas.line_height(FONT_LARGE);
+        let mut total_height = time_height;
+        if layout.show_hostname {
+            total_height += canvas.line_height(FONT_SMALL) + 4;
+        }
+        if layout.show_date && layout.date.is_some() {
+            total_height += canvas.line_height(FONT_NORMAL) + 4;
+        }
+
+        let mut y = (height as i32 - total_height) / 2;
+
+        if layout.show_hostname {
+            let h = Self::draw_centered_text(canvas, y, &layout.hostname, FONT_SMALL, colors.dim);
+            y += h + 4;
+        }
+
+        let h = Self::draw_centered_text(canvas, y, &time_str, FONT_LARGE, colors.text);
+        y += h + 4;
+
+        if layout.show_date {
+            if let Some(date) = &layout.date {
+                Self::draw_centered_text(canvas, y, date, FONT_NORMAL, colors.dim);
+            }
+        }
+    }
+
+    /// Draws an analog clock with optional hostname above and date below.
     fn draw_analog_clock(
+        canvas: &mut Canvas,
+        hour: u8,
+        minute: u8,
+        layout: &ClockLayout,
+        colors: &FaceColors,
+    ) {
+        let (width, height) = canvas.dimensions();
+        let margin = 10;
+
+        // Calculate space for complications
+        let top_space = if layout.show_hostname { 18 } else { 0 };
+        let bottom_space = if layout.show_date { 20 } else { 0 };
+
+        // Calculate clock size and position
+        let available_height = height as i32 - margin * 2 - top_space - bottom_space;
+        let available_width = width as i32 - margin * 2;
+        let radius = (available_height.min(available_width) / 2) as u32;
+        let cx = width as i32 / 2;
+        let cy = top_space + margin + radius as i32;
+
+        // Draw hostname above
+        if layout.show_hostname {
+            Self::draw_centered_text(canvas, margin / 2, &layout.hostname, FONT_SMALL, colors.dim);
+        }
+
+        // Draw clock face
+        Self::draw_clock_face(canvas, cx, cy, radius, hour, minute, colors);
+
+        // Draw date below
+        if layout.show_date {
+            if let Some(date) = &layout.date {
+                let date_y = cy + radius as i32 + 8;
+                Self::draw_centered_text(canvas, date_y, date, FONT_NORMAL, colors.text);
+            }
+        }
+    }
+
+    /// Draws the analog clock face (circle, markers, and hands).
+    fn draw_clock_face(
         canvas: &mut Canvas,
         cx: i32,
         cy: i32,
@@ -83,13 +184,11 @@ impl ClockFace {
         let radius_f = radius as f32;
 
         // Draw clock face outline
-        let start_angle = 0.0;
-        let end_angle = 2.0 * PI;
-        canvas.draw_arc(cx, cy, radius, start_angle, end_angle, 2.0, colors.outline);
+        canvas.draw_arc(cx, cy, radius, 0.0, 2.0 * PI, 2.0, colors.outline);
 
         // Draw hour markers
         for i in 0..12 {
-            let angle = (i as f32) * PI / 6.0 - PI / 2.0; // Start from 12 o'clock
+            let angle = (i as f32) * PI / 6.0 - PI / 2.0;
             let inner_r = radius_f * 0.85;
             let outer_r = radius_f * 0.95;
 
@@ -98,16 +197,8 @@ impl ClockFace {
             let x2 = cx as f32 + outer_r * angle.cos();
             let y2 = cy as f32 + outer_r * angle.sin();
 
-            // Thicker markers at 12, 3, 6, 9
             let stroke = if i % 3 == 0 { 3.0 } else { 1.5 };
-            canvas.draw_line(
-                x1 as i32,
-                y1 as i32,
-                x2 as i32,
-                y2 as i32,
-                stroke,
-                colors.outline,
-            );
+            canvas.draw_line(x1 as i32, y1 as i32, x2 as i32, y2 as i32, stroke, colors.outline);
         }
 
         // Calculate hand angles (12 o'clock = -PI/2)
@@ -124,14 +215,7 @@ impl ClockFace {
         let minute_length = radius_f * 0.75;
         let minute_x = cx as f32 + minute_length * minute_angle.cos();
         let minute_y = cy as f32 + minute_length * minute_angle.sin();
-        canvas.draw_line(
-            cx,
-            cy,
-            minute_x as i32,
-            minute_y as i32,
-            2.5,
-            colors.minute_hand,
-        );
+        canvas.draw_line(cx, cy, minute_x as i32, minute_y as i32, 2.5, colors.minute_hand);
 
         // Draw center dot
         canvas.fill_circle(cx, cy, 4, colors.center);
@@ -151,33 +235,9 @@ impl Face for ClockFace {
 
     fn available_complications(&self) -> Vec<Complication> {
         vec![
-            Complication::new("hostname", "Hostname", "Display the system hostname", false),
-            Complication::new(
-                "digital_time",
-                "Digital Time",
-                "Display the current time in digital format",
-                false,
-            ),
-            Complication::with_options(
-                complications::DATE,
-                "Date",
-                "Display the current date",
-                false,
-                vec![ComplicationOption::choice(
-                    complication_options::DATE_FORMAT,
-                    "Format",
-                    "Date display format",
-                    vec![
-                        ComplicationChoice::new(date_formats::ISO, "ISO (2024-01-15)"),
-                        ComplicationChoice::new(date_formats::US, "US (01/15/2024)"),
-                        ComplicationChoice::new(date_formats::EU, "EU (15/01/2024)"),
-                        ComplicationChoice::new(date_formats::SHORT, "Short (Jan 15)"),
-                        ComplicationChoice::new(date_formats::LONG, "Long (January 15, 2024)"),
-                        ComplicationChoice::new(date_formats::WEEKDAY, "Weekday (Mon, Jan 15)"),
-                    ],
-                    date_formats::SHORT,
-                )],
-            ),
+            complications::hostname(false),
+            complications::digital_time(false),
+            complications::date(false, date_formats::SHORT),
         ]
     }
 
@@ -189,67 +249,30 @@ impl Face for ClockFace {
         comp: &EnabledComplications,
     ) {
         let colors = FaceColors::from_theme(theme);
-        let (width, height) = canvas.dimensions();
-
         let is_on = |id: &str| comp.is_enabled(self.name(), id, false);
 
         // Get date format option
         let date_format = comp
             .get_option(
                 self.name(),
-                complications::DATE,
+                complication_names::DATE,
                 complication_options::DATE_FORMAT,
             )
             .map(|s| s.as_str())
             .unwrap_or(date_formats::SHORT);
 
-        // Check which complications are enabled
-        let show_hostname = is_on("hostname");
-        let show_digital_time = is_on("digital_time");
-        let show_date = is_on(complications::DATE);
+        // Build layout options
+        let layout = ClockLayout {
+            show_hostname: is_on("hostname"),
+            show_date: is_on(complication_names::DATE),
+            hostname: data.hostname.clone(),
+            date: data.format_date(date_format),
+        };
 
-        // Calculate space needed for complications
-        let top_space = if show_hostname { 18 } else { 0 };
-        let bottom_space = if show_date || show_digital_time { 20 } else { 0 };
-
-        // Calculate clock size and position
-        let margin = 10;
-        let available_height = height as i32 - margin * 2 - top_space - bottom_space;
-        let available_width = width as i32 - margin * 2;
-        let max_radius = (available_height.min(available_width) / 2) as u32;
-
-        let radius = max_radius;
-        let cx = width as i32 / 2;
-        let cy = top_space + margin + radius as i32;
-
-        // Draw hostname above the clock
-        if show_hostname {
-            let host_width = canvas.text_width(&data.hostname, FONT_SMALL);
-            let host_x = (width as i32 - host_width) / 2;
-            let host_y = margin / 2;
-            canvas.draw_text(host_x, host_y, &data.hostname, FONT_SMALL, colors.dim);
-        }
-
-        // Draw the analog clock
-        Self::draw_analog_clock(canvas, cx, cy, radius, data.hour, data.minute, &colors);
-
-        // Draw complications below the clock
-        let mut bottom_y = cy + radius as i32 + 8;
-
-        if show_digital_time {
-            let time_str = format!("{:02}:{:02}", data.hour, data.minute);
-            let time_width = canvas.text_width(&time_str, FONT_NORMAL);
-            let time_x = (width as i32 - time_width) / 2;
-            canvas.draw_text(time_x, bottom_y, &time_str, FONT_NORMAL, colors.text);
-            bottom_y += canvas.line_height(FONT_NORMAL) + 2;
-        }
-
-        if show_date {
-            if let Some(date_str) = data.format_date(date_format) {
-                let date_width = canvas.text_width(&date_str, FONT_NORMAL);
-                let date_x = (width as i32 - date_width) / 2;
-                canvas.draw_text(date_x, bottom_y, &date_str, FONT_NORMAL, colors.text);
-            }
+        if is_on("digital_time") {
+            Self::draw_digital_time(canvas, data.hour, data.minute, &layout, &colors);
+        } else {
+            Self::draw_analog_clock(canvas, data.hour, data.minute, &layout, &colors);
         }
     }
 }

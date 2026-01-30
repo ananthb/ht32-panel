@@ -4,8 +4,8 @@
 //! segmented areas for system metrics.
 
 use super::{
-    complication_options, complications, date_formats, time_formats, Complication,
-    ComplicationChoice, ComplicationOption, EnabledComplications, Face, Theme,
+    complication_names, complication_options, complications, date_formats, time_formats,
+    Complication, EnabledComplications, Face, Theme,
 };
 use crate::rendering::Canvas;
 use crate::sensors::data::SystemData;
@@ -97,86 +97,12 @@ impl Face for DigitsFace {
 
     fn available_complications(&self) -> Vec<Complication> {
         vec![
-            Complication::with_options(
-                complications::TIME,
-                "Time",
-                "Display the current time",
-                true,
-                vec![ComplicationOption::choice(
-                    complication_options::TIME_FORMAT,
-                    "Format",
-                    "Time display format",
-                    vec![
-                        ComplicationChoice::new(time_formats::DIGITAL_24H, "Digital (24h)"),
-                        ComplicationChoice::new(time_formats::DIGITAL_12H, "Digital (12h)"),
-                        ComplicationChoice::new(time_formats::ANALOGUE, "Analogue"),
-                    ],
-                    time_formats::DIGITAL_24H,
-                )],
-            ),
-            Complication::with_options(
-                complications::DATE,
-                "Date",
-                "Display the current date",
-                true,
-                vec![ComplicationOption::choice(
-                    complication_options::DATE_FORMAT,
-                    "Format",
-                    "Date display format",
-                    vec![
-                        ComplicationChoice::new(date_formats::ISO, "ISO (2024-01-15)"),
-                        ComplicationChoice::new(date_formats::US, "US (01/15/2024)"),
-                        ComplicationChoice::new(date_formats::EU, "EU (15/01/2024)"),
-                        ComplicationChoice::new(date_formats::SHORT, "Short (Jan 15)"),
-                        ComplicationChoice::new(date_formats::LONG, "Long (January 15, 2024)"),
-                        ComplicationChoice::new(date_formats::WEEKDAY, "Weekday (Mon, Jan 15)"),
-                    ],
-                    date_formats::ISO,
-                )],
-            ),
-            Complication::with_options(
-                complications::IP_ADDRESS,
-                "IP Address",
-                "Display network IP address",
-                true,
-                vec![ComplicationOption::choice(
-                    complication_options::IP_TYPE,
-                    "IP Type",
-                    "Type of IP address to display",
-                    vec![
-                        ComplicationChoice::new("ipv6-gua", "IPv6 Global"),
-                        ComplicationChoice::new("ipv6-lla", "IPv6 Link-Local"),
-                        ComplicationChoice::new("ipv6-ula", "IPv6 ULA"),
-                        ComplicationChoice::new("ipv4", "IPv4"),
-                    ],
-                    "ipv6-gua",
-                )],
-            ),
-            Complication::with_options(
-                complications::NETWORK,
-                "Network",
-                "Display network up/down rates",
-                true,
-                vec![ComplicationOption::choice(
-                    complication_options::INTERFACE,
-                    "Interface",
-                    "Network interface to monitor",
-                    vec![ComplicationChoice::new("auto", "Auto-detect")],
-                    "auto",
-                )],
-            ),
-            Complication::new(
-                complications::DISK_IO,
-                "Disk I/O",
-                "Display disk read/write rates",
-                true,
-            ),
-            Complication::new(
-                complications::CPU_TEMP,
-                "CPU Temperature",
-                "Display CPU temperature",
-                true,
-            ),
+            complications::time(true),
+            complications::date(true, date_formats::ISO),
+            complications::ip_address(true),
+            complications::network(true),
+            complications::disk_io(true),
+            complications::cpu_temp(true),
         ]
     }
 
@@ -199,7 +125,7 @@ impl Face for DigitsFace {
         let time_format = comp
             .get_option(
                 self.name(),
-                complications::TIME,
+                complication_names::TIME,
                 complication_options::TIME_FORMAT,
             )
             .map(|s| s.as_str())
@@ -209,7 +135,7 @@ impl Face for DigitsFace {
         let date_format = comp
             .get_option(
                 self.name(),
-                complications::DATE,
+                complication_names::DATE,
                 complication_options::DATE_FORMAT,
             )
             .map(|s| s.as_str())
@@ -218,7 +144,7 @@ impl Face for DigitsFace {
         if portrait {
             // Portrait layout
             // Complication: Time
-            if is_on(complications::TIME) && time_format != time_formats::ANALOGUE {
+            if is_on(complication_names::TIME) && time_format != time_formats::ANALOGUE {
                 let time_str = data.format_time(time_format);
                 let time_width = canvas.text_width(&time_str, FONT_TIME);
                 let time_x = (width as i32 - time_width) / 2;
@@ -227,7 +153,7 @@ impl Face for DigitsFace {
             }
 
             // Complication: Date (centered, if not hidden)
-            if is_on(complications::DATE) {
+            if is_on(complication_names::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
                     let date_width = canvas.text_width(&date_str, FONT_MEDIUM);
                     let date_x = (width as i32 - date_width) / 2;
@@ -268,7 +194,7 @@ impl Face for DigitsFace {
             y += 32;
 
             // Complication: Disk I/O
-            if is_on(complications::DISK_IO) {
+            if is_on(complication_names::DISK_IO) {
                 Self::draw_divider(canvas, y, width, margin, colors.divider);
                 y += 6;
                 let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
@@ -295,7 +221,7 @@ impl Face for DigitsFace {
             }
 
             // Complication: Network
-            if is_on(complications::NETWORK) {
+            if is_on(complication_names::NETWORK) {
                 let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
                 let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
                 Self::draw_segment_value(
@@ -334,7 +260,7 @@ impl Face for DigitsFace {
             y += canvas.line_height(FONT_SMALL) + 2;
 
             // Complication: IP address
-            if is_on(complications::IP_ADDRESS) {
+            if is_on(complication_names::IP_ADDRESS) {
                 if let Some(ref ip) = data.display_ip {
                     let max_chars = if width < 150 { 20 } else { 30 };
                     let ip_display = if ip.len() > max_chars {
@@ -348,7 +274,7 @@ impl Face for DigitsFace {
         } else {
             // Landscape layout
             // Complication: Time
-            if is_on(complications::TIME) && time_format != time_formats::ANALOGUE {
+            if is_on(complication_names::TIME) && time_format != time_formats::ANALOGUE {
                 let time_str = data.format_time(time_format);
                 canvas.draw_text(margin, y, &time_str, FONT_TIME, colors.segment_on);
             }
@@ -363,7 +289,7 @@ impl Face for DigitsFace {
                 colors.label,
             );
 
-            if is_on(complications::DATE) {
+            if is_on(complication_names::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
                     let date_width = canvas.text_width(&date_str, FONT_MEDIUM);
                     canvas.draw_text(
@@ -422,7 +348,7 @@ impl Face for DigitsFace {
                 colors.segment_on,
             );
             // Complication: CPU temperature
-            if is_on(complications::CPU_TEMP) {
+            if is_on(complication_names::CPU_TEMP) {
                 if let Some(temp) = data.cpu_temp {
                     Self::draw_segment_value(
                         canvas,
@@ -441,7 +367,7 @@ impl Face for DigitsFace {
             y += 8;
 
             // Row 2: Disk R, Disk W (complication), Net Down, Net Up (complication)
-            if is_on(complications::DISK_IO) {
+            if is_on(complication_names::DISK_IO) {
                 let disk_r = SystemData::format_rate_compact(data.disk_read_rate);
                 let disk_w = SystemData::format_rate_compact(data.disk_write_rate);
                 Self::draw_segment_value(
@@ -463,7 +389,7 @@ impl Face for DigitsFace {
                     colors.segment_on,
                 );
             }
-            if is_on(complications::NETWORK) {
+            if is_on(complication_names::NETWORK) {
                 let net_rx = SystemData::format_rate_compact(data.net_rx_rate);
                 let net_tx = SystemData::format_rate_compact(data.net_tx_rate);
                 Self::draw_segment_value(
@@ -491,7 +417,7 @@ impl Face for DigitsFace {
             y += 6;
 
             // Complication: IP address
-            if is_on(complications::IP_ADDRESS) {
+            if is_on(complication_names::IP_ADDRESS) {
                 if let Some(ref ip) = data.display_ip {
                     canvas.draw_text(margin, y, ip, FONT_MEDIUM, colors.label);
                 }
