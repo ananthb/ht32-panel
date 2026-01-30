@@ -255,7 +255,7 @@ impl Face for ProfessionalFace {
             // Hostname (always shown)
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
 
-            // Complication: Time
+            // Complication: Time (right-aligned)
             if is_enabled(complications::TIME) && time_format != time_formats::ANALOGUE {
                 let time_str = data.format_time(time_format);
                 let time_width = canvas.text_width(&time_str, FONT_LARGE);
@@ -269,10 +269,17 @@ impl Face for ProfessionalFace {
             }
             y += canvas.line_height(FONT_LARGE) + 2;
 
-            // Complication: Date (if not hidden)
+            // Complication: Date (right-aligned, under time)
             if is_enabled(complications::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
-                    canvas.draw_text(margin, y, &date_str, FONT_SMALL, colors.dim);
+                    let date_width = canvas.text_width(&date_str, FONT_SMALL);
+                    canvas.draw_text(
+                        width as i32 - margin - date_width,
+                        y,
+                        &date_str,
+                        FONT_SMALL,
+                        colors.dim,
+                    );
                     y += canvas.line_height(FONT_SMALL) + 2;
                 }
             }
@@ -410,7 +417,7 @@ impl Face for ProfessionalFace {
             // Hostname (always shown)
             canvas.draw_text(margin, y, &data.hostname, FONT_LARGE, colors.highlight);
 
-            // Complication: Time
+            // Complication: Time (right-aligned)
             if is_enabled(complications::TIME) && time_format != time_formats::ANALOGUE {
                 let time_str = data.format_time(time_format);
                 let time_width = canvas.text_width(&time_str, FONT_LARGE);
@@ -424,10 +431,17 @@ impl Face for ProfessionalFace {
             }
             y += canvas.line_height(FONT_LARGE) + 2;
 
-            // Complication: Date (if not hidden)
+            // Complication: Date (right-aligned, under time)
             if is_enabled(complications::DATE) {
                 if let Some(date_str) = data.format_date(date_format) {
-                    canvas.draw_text(margin, y, &date_str, FONT_NORMAL, colors.dim);
+                    let date_width = canvas.text_width(&date_str, FONT_NORMAL);
+                    canvas.draw_text(
+                        width as i32 - margin - date_width,
+                        y,
+                        &date_str,
+                        FONT_NORMAL,
+                        colors.dim,
+                    );
                     y += canvas.line_height(FONT_NORMAL) + 2;
                 }
             }
