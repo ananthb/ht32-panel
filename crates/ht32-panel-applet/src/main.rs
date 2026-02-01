@@ -68,10 +68,6 @@ async fn main() -> Result<()> {
                             let mut s = cmd_state.lock().unwrap();
                             s.face = face;
                         }
-                        if let Ok(rate) = c.get_refresh_interval().await {
-                            let mut s = cmd_state.lock().unwrap();
-                            s.refresh_interval = rate;
-                        }
                         if let Ok(iface) = c.get_complication_option("network", "interface").await {
                             let mut s = cmd_state.lock().unwrap();
                             s.network_interface = iface;
@@ -137,21 +133,6 @@ async fn main() -> Result<()> {
                                     }
                                     Err(e) => {
                                         error!("Failed to set face: {}", e);
-                                        client = None; // Mark for reconnection
-                                    }
-                                }
-                            }
-                        }
-                        Some(TrayCommand::SetRefreshInterval(secs)) => {
-                            if let Some(ref c) = client {
-                                match c.set_refresh_interval(secs).await {
-                                    Ok(()) => {
-                                        let mut s = cmd_state.lock().unwrap();
-                                        s.refresh_interval = secs;
-                                        debug!("Refresh rate set to {}s", secs);
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to set refresh rate: {}", e);
                                         client = None; // Mark for reconnection
                                     }
                                 }

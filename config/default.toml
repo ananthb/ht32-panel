@@ -7,14 +7,11 @@ enable = false
 # Server listen address
 listen = "[::1]:8686"
 
-# Render loop poll interval (milliseconds)
-poll = 500
-
-# Display refresh rate (milliseconds)
-refresh = 1600
+# Display refresh rate (Hz)
+refresh_rate = 60
 
 # Heartbeat interval (milliseconds)
-heartbeat = 60000
+heartbeat = 1000
 
 # Device Configuration
 [devices]

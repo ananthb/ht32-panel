@@ -67,12 +67,6 @@ trait Daemon1 {
     /// Lists available faces with display names (JSON-encoded).
     fn list_faces(&self) -> zbus::Result<Vec<String>>;
 
-    /// Gets the refresh interval in milliseconds.
-    fn get_refresh_interval(&self) -> zbus::Result<u32>;
-
-    /// Sets the refresh interval in milliseconds.
-    fn set_refresh_interval(&self, ms: u32) -> zbus::Result<()>;
-
     /// Lists all available network interfaces.
     fn list_network_interfaces(&self) -> zbus::Result<Vec<String>>;
 
@@ -137,10 +131,6 @@ trait Daemon1 {
     /// Current LED speed (1-5).
     #[zbus(property)]
     fn led_speed(&self) -> zbus::Result<u8>;
-
-    /// Current refresh interval in milliseconds.
-    #[zbus(property)]
-    fn refresh_interval(&self) -> zbus::Result<u32>;
 
     /// Current display face name.
     #[zbus(property)]
@@ -337,21 +327,6 @@ impl DaemonClient {
     }
 
     /// Gets the refresh interval in milliseconds.
-    pub async fn get_refresh_interval(&self) -> Result<u32> {
-        self.proxy
-            .get_refresh_interval()
-            .await
-            .context("Failed to get refresh interval via D-Bus")
-    }
-
-    /// Sets the refresh interval in milliseconds.
-    pub async fn set_refresh_interval(&self, ms: u32) -> Result<()> {
-        self.proxy
-            .set_refresh_interval(ms)
-            .await
-            .context("Failed to set refresh interval via D-Bus")
-    }
-
     /// Lists available network interfaces.
     pub async fn list_network_interfaces(&self) -> Result<Vec<String>> {
         self.proxy

@@ -165,7 +165,6 @@ pub fn create_router(state: Arc<AppState>, signal_tx: broadcast::Sender<DaemonSi
         )
         .route("/complication-option", post(complication_option_set))
         .route("/preview", get(preview_get))
-        .route("/refresh-interval", post(refresh_interval_set))
         // State
         .with_state(web_state)
 }
@@ -380,21 +379,6 @@ async fn preview_get() -> impl IntoResponse {
         .unwrap()
         .as_millis();
     Html(PreviewTemplate { timestamp }.render().unwrap())
-}
-
-/// Form data for refresh interval (milliseconds).
-#[derive(Deserialize)]
-struct RefreshIntervalForm {
-    interval: u32,
-}
-
-/// POST /refresh-interval - Set LCD refresh interval in milliseconds
-async fn refresh_interval_set(
-    State(state): State<WebState>,
-    Form(form): Form<RefreshIntervalForm>,
-) -> impl IntoResponse {
-    state.app.set_refresh_interval_ms(form.interval);
-    StatusCode::OK
 }
 
 /// GET /complications - Complications controls partial

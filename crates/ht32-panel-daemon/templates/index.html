@@ -13,16 +13,10 @@
         <span class="spinner" style="width: 2em; height: 2em;"></span>
     </div>
     <img id="lcd-preview" src="/lcd.png" alt="LCD Preview">
-    <div class="refresh-controls">
-        <label>Refresh Interval: <span id="refresh-value">2000</span>ms</label>
-        <input type="range" id="refresh-slider" min="1500" max="10000" step="500" value="2000">
-    </div>
 </div>
 <script>
 (function() {
     const img = document.getElementById('lcd-preview');
-    const slider = document.getElementById('refresh-slider');
-    const label = document.getElementById('refresh-value');
     const loading = document.getElementById('preview-loading');
     let intervalId = null;
     let pendingRefresh = false;
@@ -56,17 +50,6 @@
         // Small delay to let the server process the change
         setTimeout(refresh, 100);
     }
-
-    function start(ms) {
-        if (intervalId) clearInterval(intervalId);
-        intervalId = setInterval(refresh, ms);
-        fetch('/refresh-interval', { method: 'POST', body: 'interval=' + ms, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-    }
-
-    slider.oninput = function() {
-        label.textContent = this.value;
-        start(parseInt(this.value));
-    };
 
     // Listen for HTMX requests to show loading on preview
     document.body.addEventListener('htmx:beforeRequest', function(evt) {
@@ -116,7 +99,8 @@
         }, 5000);
     };
 
-    start(2000);
+    // Start preview refresh at 1Hz
+    intervalId = setInterval(refresh, 1000);
 })();
 </script>
 

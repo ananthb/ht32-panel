@@ -25,22 +25,12 @@ const ORIENTATIONS: &[(&str, &str)] = &[
 /// Face options: (display name, face string)
 const FACES: &[(&str, &str)] = &[("ASCII", "ascii"), ("Professional", "professional")];
 
-/// Refresh interval options in milliseconds: (display name, milliseconds)
-const REFRESH_INTERVALS: &[(&str, u32)] = &[
-    ("1.5 seconds", 1500),
-    ("2 seconds", 2000),
-    ("3 seconds", 3000),
-    ("5 seconds", 5000),
-    ("10 seconds", 10000),
-];
-
 /// Commands that can be sent from tray callbacks to the async worker.
 #[derive(Debug, Clone)]
 pub enum TrayCommand {
     SetLedTheme(u8),
     SetOrientation(String),
     SetFace(String),
-    SetRefreshInterval(u32),
     SetNetworkInterface(String),
     QuitDaemon,
 }
@@ -54,7 +44,6 @@ pub struct TrayState {
     pub led_speed: u8,
     pub orientation: String,
     pub face: String,
-    pub refresh_interval: u32,
     pub network_interface: String,
     pub network_interfaces: Vec<String>,
 }
@@ -69,7 +58,6 @@ impl Default for TrayState {
             led_speed: 3,
             orientation: "landscape".to_string(),
             face: "professional".to_string(),
-            refresh_interval: 2000, // 2 second default
             network_interface: String::new(),
             network_interfaces: Vec::new(),
         }
@@ -126,18 +114,6 @@ impl HT32PanelTray {
             // Update local state immediately for UI feedback
             if let Ok(mut s) = self.state.lock() {
                 s.face = face.to_string();
-            }
-        }
-    }
-
-    fn set_refresh_interval(&mut self, index: usize) {
-        if let Some((_, ms)) = REFRESH_INTERVALS.get(index) {
-            if let Err(e) = self.command_tx.send(TrayCommand::SetRefreshInterval(*ms)) {
-                debug!("Failed to send refresh interval command: {}", e);
-            }
-            // Update local state immediately for UI feedback
-            if let Ok(mut s) = self.state.lock() {
-                s.refresh_interval = *ms;
             }
         }
     }
@@ -211,7 +187,6 @@ impl Tray for HT32PanelTray {
         let current_theme = state.led_theme;
         let current_orientation = state.orientation.clone();
         let current_face = state.face.clone();
-        let current_refresh_interval = state.refresh_interval;
         let current_network = state.network_interface.clone();
         let network_interfaces = state.network_interfaces.clone();
         let web_enabled = state.web_enabled;
@@ -234,12 +209,6 @@ impl Tray for HT32PanelTray {
             .iter()
             .position(|(_, f)| *f == current_face)
             .unwrap_or(0);
-
-        // Find current refresh rate index
-        let refresh_selected = REFRESH_INTERVALS
-            .iter()
-            .position(|(_, r)| *r == current_refresh_interval)
-            .unwrap_or(1); // Default to 5 seconds
 
         // Find current network interface index (0 = auto)
         let network_selected = if current_network.is_empty() {
@@ -272,15 +241,6 @@ impl Tray for HT32PanelTray {
 
         // Create face radio items
         let face_options: Vec<RadioItem> = FACES
-            .iter()
-            .map(|(name, _)| RadioItem {
-                label: name.to_string(),
-                ..Default::default()
-            })
-            .collect();
-
-        // Create refresh rate radio items
-        let refresh_options: Vec<RadioItem> = REFRESH_INTERVALS
             .iter()
             .map(|(name, _)| RadioItem {
                 label: name.to_string(),
@@ -335,19 +295,6 @@ impl Tray for HT32PanelTray {
                         tray.set_network_interface(index);
                     }),
                     options: network_options,
-                }
-                .into()],
-                ..Default::default()
-            }
-            .into(),
-            SubMenu {
-                label: "Refresh Interval".to_string(),
-                submenu: vec![RadioGroup {
-                    selected: refresh_selected,
-                    select: Box::new(|tray: &mut Self, index| {
-                        tray.set_refresh_interval(index);
-                    }),
-                    options: refresh_options,
                 }
                 .into()],
                 ..Default::default()

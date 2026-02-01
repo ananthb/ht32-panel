@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-applet"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "ht32-panel-client",
@@ -1017,7 +1017,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-cli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap 4.5.54",
@@ -1030,7 +1030,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-client"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "tracing",
@@ -1039,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-daemon"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "ht32-panel-hw"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "hidapi",
  "thiserror 1.0.69",

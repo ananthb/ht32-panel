@@ -21,13 +21,9 @@ pub struct Config {
     #[serde(default = "default_state_dir")]
     pub state_dir: String,
 
-    /// Render loop poll interval in milliseconds
-    #[serde(default = "default_poll")]
-    pub poll: u64,
-
-    /// Display refresh rate in milliseconds
-    #[serde(default = "default_refresh")]
-    pub refresh: u64,
+    /// Display refresh rate in Hz
+    #[serde(default = "default_refresh_rate")]
+    pub refresh_rate: u64,
 
     /// Heartbeat interval in milliseconds
     #[serde(default = "default_heartbeat")]
@@ -153,16 +149,12 @@ fn default_state_dir() -> String {
     }
 }
 
-fn default_poll() -> u64 {
-    500
-}
-
-fn default_refresh() -> u64 {
-    1600
+fn default_refresh_rate() -> u64 {
+    60
 }
 
 fn default_heartbeat() -> u64 {
-    60000
+    1000
 }
 
 fn default_lcd_device() -> String {
@@ -204,8 +196,7 @@ impl Default for Config {
             web: WebConfig::default(),
             dbus: DbusConfig::default(),
             state_dir: default_state_dir(),
-            poll: default_poll(),
-            refresh: default_refresh(),
+            refresh_rate: default_refresh_rate(),
             heartbeat: default_heartbeat(),
             devices: DevicesConfig::default(),
             canvas: CanvasConfig::default(),

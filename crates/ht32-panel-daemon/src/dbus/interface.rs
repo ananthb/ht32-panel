@@ -282,29 +282,6 @@ impl Daemon1Interface {
         self.state.face_name()
     }
 
-    /// Current refresh interval in milliseconds.
-    #[zbus(property)]
-    fn refresh_interval(&self) -> u32 {
-        self.state.refresh_interval_ms()
-    }
-
-    /// Gets the refresh interval in milliseconds.
-    fn get_refresh_interval(&self) -> u32 {
-        self.state.refresh_interval_ms()
-    }
-
-    /// Sets the refresh interval in milliseconds (1500-10000).
-    fn set_refresh_interval(&self, ms: u32) -> zbus::fdo::Result<()> {
-        if !(1500..=10000).contains(&ms) {
-            return Err(zbus::fdo::Error::InvalidArgs(
-                "Refresh interval must be 1500-10000 milliseconds".to_string(),
-            ));
-        }
-        self.state.set_refresh_interval_ms(ms);
-        debug!("D-Bus: SetRefreshInterval({}ms)", ms);
-        Ok(())
-    }
-
     /// Lists all available network interfaces.
     fn list_network_interfaces(&self) -> Vec<String> {
         self.state.list_network_interfaces()

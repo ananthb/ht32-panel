@@ -100,11 +100,6 @@ enum LcdCommands {
     },
     /// List available faces
     ListFaces,
-    /// Set or show the refresh interval
-    Refresh {
-        /// Refresh interval in milliseconds (1500-10000, omit to show current)
-        milliseconds: Option<u32>,
-    },
     /// Show device information
     Info,
 }
@@ -238,28 +233,14 @@ async fn handle_lcd(action: LcdCommands, client: &DaemonClient) -> Result<()> {
                 println!("  {}", face);
             }
         }
-        LcdCommands::Refresh { milliseconds } => {
-            if let Some(ms) = milliseconds {
-                if !(1500..=10000).contains(&ms) {
-                    anyhow::bail!("Refresh interval must be between 1500 and 10000 milliseconds");
-                }
-                client.set_refresh_interval(ms).await?;
-                println!("Refresh interval set to: {}ms", ms);
-            } else {
-                let current = client.get_refresh_interval().await?;
-                println!("Current refresh interval: {}ms", current);
-            }
-        }
         LcdCommands::Info => {
             let connected = client.is_connected().await?;
             let orientation = client.get_orientation().await?;
             let face = client.get_face().await?;
-            let refresh = client.get_refresh_interval().await?;
             println!("LCD Status:");
             println!("  Connected: {}", if connected { "yes" } else { "no" });
             println!("  Orientation: {}", orientation);
             println!("  Face: {}", face);
-            println!("  Refresh interval: {}ms", refresh);
         }
     }
 
