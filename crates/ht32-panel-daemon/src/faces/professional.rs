@@ -383,7 +383,7 @@ impl Face for ProfessionalFace {
                     // Draw small analog clock on the right
                     let clock_radius = 10_u32;
                     let clock_cx = width as i32 - margin - clock_radius as i32;
-                    let clock_cy = y + clock_radius as i32 + 2;
+                    let clock_cy = y + clock_radius as i32 - 2;
                     draw_mini_analog_clock(
                         canvas,
                         clock_cx,
@@ -478,7 +478,7 @@ impl Face for ProfessionalFace {
                 colors.bar_ram,
                 colors.bar_bg,
             );
-            y += line_height + 8;
+            y += line_height;
 
             // DSK: label line, then graph on next line
             if is_enabled(complication_names::DISK_IO) {
@@ -505,7 +505,7 @@ impl Face for ProfessionalFace {
                     colors.bar_disk,
                     colors.bar_bg,
                 );
-                y += GRAPH_HEIGHT as i32 + 8;
+                y += GRAPH_HEIGHT as i32;
             }
 
             // NET: label line, then graph on next line
