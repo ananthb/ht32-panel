@@ -150,7 +150,7 @@ fn default_state_dir() -> String {
 }
 
 fn default_refresh_rate() -> u64 {
-    30
+    2
 }
 
 fn default_heartbeat() -> u64 {

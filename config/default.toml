@@ -8,7 +8,7 @@ enable = false
 listen = "[::1]:8686"
 
 # Display refresh rate (Hz)
-refresh_rate = 30
+refresh_rate = 2
 
 # Heartbeat interval (milliseconds)
 heartbeat = 1000
