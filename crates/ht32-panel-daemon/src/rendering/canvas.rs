@@ -72,6 +72,27 @@ impl Canvas {
 
     /// Draws a filled rectangle.
     pub fn fill_rect(&mut self, x: i32, y: i32, width: u32, height: u32, color: u32) {
+        debug_assert!(
+            x >= 0 && y >= 0,
+            "fill_rect: negative coordinates ({}, {})",
+            x,
+            y
+        );
+        debug_assert!(
+            x + width as i32 <= self.width as i32,
+            "fill_rect: x overflow ({} + {} > {})",
+            x,
+            width,
+            self.width
+        );
+        debug_assert!(
+            y + height as i32 <= self.height as i32,
+            "fill_rect: y overflow ({} + {} > {})",
+            y,
+            height,
+            self.height
+        );
+
         let r = ((color >> 16) & 0xFF) as f32 / 255.0;
         let g = ((color >> 8) & 0xFF) as f32 / 255.0;
         let b = (color & 0xFF) as f32 / 255.0;
@@ -87,6 +108,33 @@ impl Canvas {
 
     /// Draws a filled circle.
     pub fn fill_circle(&mut self, cx: i32, cy: i32, radius: u32, color: u32) {
+        debug_assert!(
+            cx - radius as i32 >= 0,
+            "fill_circle: left edge off screen ({} - {} < 0)",
+            cx,
+            radius
+        );
+        debug_assert!(
+            cy - radius as i32 >= 0,
+            "fill_circle: top edge off screen ({} - {} < 0)",
+            cy,
+            radius
+        );
+        debug_assert!(
+            cx + radius as i32 <= self.width as i32,
+            "fill_circle: right edge off screen ({} + {} > {})",
+            cx,
+            radius,
+            self.width
+        );
+        debug_assert!(
+            cy + radius as i32 <= self.height as i32,
+            "fill_circle: bottom edge off screen ({} + {} > {})",
+            cy,
+            radius,
+            self.height
+        );
+
         let r = ((color >> 16) & 0xFF) as f32 / 255.0;
         let g = ((color >> 8) & 0xFF) as f32 / 255.0;
         let b = (color & 0xFF) as f32 / 255.0;
@@ -161,6 +209,34 @@ impl Canvas {
         stroke_width: f32,
         color: u32,
     ) {
+        let total_radius = radius as i32 + (stroke_width / 2.0).ceil() as i32;
+        debug_assert!(
+            cx - total_radius >= 0,
+            "draw_arc: left edge off screen ({} - {} < 0)",
+            cx,
+            total_radius
+        );
+        debug_assert!(
+            cy - total_radius >= 0,
+            "draw_arc: top edge off screen ({} - {} < 0)",
+            cy,
+            total_radius
+        );
+        debug_assert!(
+            cx + total_radius <= self.width as i32,
+            "draw_arc: right edge off screen ({} + {} > {})",
+            cx,
+            total_radius,
+            self.width
+        );
+        debug_assert!(
+            cy + total_radius <= self.height as i32,
+            "draw_arc: bottom edge off screen ({} + {} > {})",
+            cy,
+            total_radius,
+            self.height
+        );
+
         let r = ((color >> 16) & 0xFF) as f32 / 255.0;
         let g = ((color >> 8) & 0xFF) as f32 / 255.0;
         let b = (color & 0xFF) as f32 / 255.0;
@@ -209,6 +285,32 @@ impl Canvas {
     /// * `size` - Font size in pixels
     /// * `color` - RGB888 color (0xRRGGBB)
     pub fn draw_text(&mut self, x: i32, y: i32, text: &str, size: f32, color: u32) {
+        let text_width = self.text_renderer.text_width(text, size);
+        let text_height = self.text_renderer.line_height(size);
+        debug_assert!(
+            x >= 0 && y >= 0,
+            "draw_text: negative coordinates ({}, {}) for '{}'",
+            x,
+            y,
+            text
+        );
+        debug_assert!(
+            x + text_width <= self.width as i32,
+            "draw_text: text extends past right edge ({} + {} > {}) for '{}'",
+            x,
+            text_width,
+            self.width,
+            text
+        );
+        debug_assert!(
+            y + text_height <= self.height as i32,
+            "draw_text: text extends past bottom edge ({} + {} > {}) for '{}'",
+            y,
+            text_height,
+            self.height,
+            text
+        );
+
         self.text_renderer
             .draw_text(&mut self.pixmap, x, y, text, size, color);
     }
@@ -232,6 +334,32 @@ impl Canvas {
         color: u32,
         x_scale: f32,
     ) {
+        let text_width = self.text_renderer.text_width_scaled(text, size, x_scale);
+        let text_height = self.text_renderer.line_height(size);
+        debug_assert!(
+            x >= 0 && y >= 0,
+            "draw_text_scaled: negative coordinates ({}, {}) for '{}'",
+            x,
+            y,
+            text
+        );
+        debug_assert!(
+            x + text_width <= self.width as i32,
+            "draw_text_scaled: text extends past right edge ({} + {} > {}) for '{}'",
+            x,
+            text_width,
+            self.width,
+            text
+        );
+        debug_assert!(
+            y + text_height <= self.height as i32,
+            "draw_text_scaled: text extends past bottom edge ({} + {} > {}) for '{}'",
+            y,
+            text_height,
+            self.height,
+            text
+        );
+
         self.text_renderer
             .draw_text_scaled(&mut self.pixmap, x, y, text, size, color, x_scale);
     }
@@ -274,8 +402,37 @@ impl Canvas {
         line_color: u32,
         bg_color: u32,
     ) {
-        // Draw background
-        self.fill_rect(x, y, width, height, bg_color);
+        debug_assert!(
+            x >= 0 && y >= 0,
+            "draw_graph: negative coordinates ({}, {})",
+            x,
+            y
+        );
+        debug_assert!(
+            x + width as i32 <= self.width as i32,
+            "draw_graph: x overflow ({} + {} > {})",
+            x,
+            width,
+            self.width
+        );
+        debug_assert!(
+            y + height as i32 <= self.height as i32,
+            "draw_graph: y overflow ({} + {} > {})",
+            y,
+            height,
+            self.height
+        );
+
+        // Draw background - use internal fill to avoid duplicate bounds check
+        let r = ((bg_color >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((bg_color >> 8) & 0xFF) as f32 / 255.0;
+        let b = (bg_color & 0xFF) as f32 / 255.0;
+        let mut paint = Paint::default();
+        paint.set_color(Color::from_rgba(r, g, b, 1.0).unwrap());
+        if let Some(rect) = Rect::from_xywh(x as f32, y as f32, width as f32, height as f32) {
+            self.pixmap
+                .fill_rect(rect, &paint, Transform::identity(), None);
+        }
 
         if data.is_empty() || max_value <= 0.0 {
             return;
