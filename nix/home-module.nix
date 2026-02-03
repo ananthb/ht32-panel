@@ -25,20 +25,12 @@ let
       enable = cfg.web.enable;
       listen = cfg.web.listen;
     };
-    dbus = {
-      bus = cfg.dbus.bus;
-    };
+    dbus.bus = cfg.dbus.bus;
     devices = {
       lcd = cfg.devices.lcd;
       led = cfg.devices.led;
     };
-    canvas = {
-      width = cfg.canvas.width;
-      height = cfg.canvas.height;
-    };
   }
-  // lib.optionalAttrs (cfg.theme != null) { theme = cfg.theme; }
-  // lib.optionalAttrs (cfg.poll != null) { poll = cfg.poll; }
   // lib.optionalAttrs (cfg.refresh != null) { refresh_interval = cfg.refresh; }
   // lib.optionalAttrs (cfg.heartbeat != null) { heartbeat = cfg.heartbeat; }
   // cfg.extraSettings);
@@ -85,18 +77,6 @@ in
       };
     };
 
-    theme = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "Path to the theme configuration file.";
-    };
-
-    poll = lib.mkOption {
-      type = lib.types.nullOr lib.types.int;
-      default = null;
-      description = "Render loop poll interval in milliseconds.";
-    };
-
     refresh = lib.mkOption {
       type = lib.types.nullOr lib.types.int;
       default = null;
@@ -124,20 +104,6 @@ in
           Note: LED theme, intensity, and speed are stored in the state directory.
           Use `ht32panelctl led set <theme>` to change them.
         '';
-      };
-    };
-
-    canvas = {
-      width = lib.mkOption {
-        type = lib.types.int;
-        default = 320;
-        description = "Canvas width in pixels.";
-      };
-
-      height = lib.mkOption {
-        type = lib.types.int;
-        default = 170;
-        description = "Canvas height in pixels.";
       };
     };
 
