@@ -26,3 +26,32 @@ jobs:
           files: |
             result/*
           generate_release_notes: true
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish ht32-panel-hw
+        run: cargo publish -p ht32-panel-hw --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io indexing
+        run: sleep 30
+
+      - name: Publish ht32-panel-client
+        run: cargo publish -p ht32-panel-client --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io indexing
+        run: sleep 30
+
+      - name: Publish ht32-panel-daemon
+        run: cargo publish -p ht32-panel-daemon --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish ht32-panel-cli
+        run: cargo publish -p ht32-panel-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish ht32-panel-applet
+        run: cargo publish -p ht32-panel-applet --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
