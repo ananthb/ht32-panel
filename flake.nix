@@ -105,7 +105,7 @@
 
         checks = {
           fmt = pkgs.runCommand "check-fmt" {
-            buildInputs = [ rustToolchain ];
+            nativeBuildInputs = [ rustToolchain ];
             src = self;
           } ''
             cd $src
@@ -113,25 +113,23 @@
             touch $out
           '';
 
-          clippy = pkgs.runCommand "check-clippy" {
-            buildInputs = [ rustToolchain ] ++ nativeBuildInputs ++ appletBuildInputs;
-            src = self;
-          } ''
-            cd $src
-            export HOME=$(mktemp -d)
-            cargo clippy --workspace --all-targets -- -D warnings
-            touch $out
-          '';
+          clippy = pkgs.rustPlatform.buildRustPackage (cargoArgs // {
+            pname = "ht32-panel-clippy";
+            nativeBuildInputs = nativeBuildInputs ++ [
+              pkgs.clippy
+              pkgs.rustPlatform.cargoSetupHook
+            ];
+            buildInputs = appletBuildInputs;
+            buildPhase = ''
+              runHook preBuild
+              cargo clippy --workspace --all-targets --offline -- -D warnings
+              runHook postBuild
+            '';
+            installPhase = "mkdir -p $out";
+            doCheck = false;
+          });
 
-          tests = pkgs.runCommand "check-tests" {
-            buildInputs = [ rustToolchain pkgs.cargo-nextest ] ++ nativeBuildInputs ++ appletBuildInputs;
-            src = self;
-          } ''
-            cd $src
-            export HOME=$(mktemp -d)
-            cargo nextest run --workspace -- --skip test_device_open
-            touch $out
-          '';
+          tests = self.packages.${system}.default;
         };
 
         devShells.default = pkgs.mkShell {
