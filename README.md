@@ -1,11 +1,6 @@
 # HT32 Panel
 
 [![Release](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml/badge.svg)](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml)
-[![Crates.io](https://img.shields.io/crates/v/ht32-panel-applet)](https://crates.io/crates/ht32-panel-applet)
-[![Crates.io](https://img.shields.io/crates/v/ht32-panel-cli)](https://crates.io/crates/ht32-panel-cli)
-[![Crates.io](https://img.shields.io/crates/v/ht32-panel-client)](https://crates.io/crates/ht32-panel-client)
-[![Crates.io](https://img.shields.io/crates/v/ht32-panel-daemon)](https://crates.io/crates/ht32-panel-daemon)
-[![Crates.io](https://img.shields.io/crates/v/ht32-panel-hw)](https://crates.io/crates/ht32-panel-hw)
 
 ![Panel Face](https://raw.githubusercontent.com/ananthb/ht32-panel/main/images/ht32-panel-ascii-landscape.png)
 
