@@ -1,6 +1,8 @@
 # HT32 Panel
 
 [![Release](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml/badge.svg)](https://github.com/ananthb/ht32-panel/actions/workflows/release.yml)
+[![Crates.io](https://img.shields.io/crates/v/ht32-panel-daemon)](https://crates.io/crates/ht32-panel-daemon)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
 
 ![ht32-panel](https://raw.githubusercontent.com/ananthb/ht32-panel/main/images/ht32-panel-ascii-landscape.png)
 

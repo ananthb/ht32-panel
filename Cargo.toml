@@ -16,6 +16,10 @@ authors = ["Ananth Bhaskararaman <ab@calculon.tech>"]
 repository = "https://github.com/ananthb/ht32-panel"
 
 [workspace.dependencies]
+# Internal crates
+ht32-panel-hw = { version = "0.8.0", path = "crates/ht32-panel-hw" }
+ht32-panel-client = { version = "0.8.0", path = "crates/ht32-panel-client" }
+
 # Hardware
 # Use libusb backend on Linux to match reference implementation
 hidapi = { version = "2", default-features = false, features = ["linux-static-libusb"] }
@@ -23,7 +27,6 @@ tokio-serial = "5"
 
 # D-Bus
 zbus = { version = "5", default-features = false, features = ["tokio"] }
-ht32-panel-client = { path = "crates/ht32-panel-client" }
 
 # System tray
 ksni = "0.2"
