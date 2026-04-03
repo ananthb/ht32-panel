@@ -15,7 +15,10 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@main
 
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Configure Garnix cache
+        run: |
+          nix config set extra-substituters "https://cache.garnix.io"
+          nix config set extra-trusted-public-keys "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
 
       - name: Build release artifacts
         run: nix build .#release

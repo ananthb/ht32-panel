@@ -1,5 +1,5 @@
 builds:
-  exclude:
-    - "packages.*.release-tarball"
-    - "packages.*.release-appimage"
-    - "packages.*.release"
+  include:
+    - "checks.*"
+    - "packages.*"
+    - "devShells.*"
