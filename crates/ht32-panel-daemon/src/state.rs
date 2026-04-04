@@ -1,8 +1,6 @@
 //! Application state management.
 
-#![allow(dead_code, unused_imports)]
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 use ht32_panel_hw::{
     lcd::{Framebuffer, LcdDevice},
     led::{LedDevice, LedTheme},
@@ -10,6 +8,7 @@ use ht32_panel_hw::{
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
 
@@ -136,15 +135,13 @@ impl Sensors {
     }
 
     fn sample(&mut self, ip_preference: IpDisplayPreference) -> SystemData {
-        // Sample all sensors
         let cpu_percent = self.cpu.sample();
-        let _ = self.temperature.sample(); // Updates internal state
+        let _ = self.temperature.sample();
         let cpu_temp = self.temperature.temperature();
         let ram_percent = self.memory.sample();
-        let _ = self.network.sample(); // Updates internal state
-        let _ = self.disk.sample(); // Updates internal state
+        let _ = self.network.sample();
+        let _ = self.disk.sample();
 
-        // Get the IP address based on preference
         let display_ip = match ip_preference {
             IpDisplayPreference::Ipv6Gua => self.network.ipv6_gua(),
             IpDisplayPreference::Ipv6Lla => self.network.ipv6_lla(),
@@ -152,7 +149,6 @@ impl Sensors {
             IpDisplayPreference::Ipv4 => self.network.ipv4_address(),
         };
 
-        // Get time components
         let (hour, minute, day, month, year, day_of_week, _) = self.system.time_components();
 
         SystemData {
@@ -184,54 +180,68 @@ impl Sensors {
     }
 }
 
+/// Display-related state (face, orientation, theme, complications).
+struct DisplayState {
+    orientation: Orientation,
+    face: Box<dyn Face>,
+    theme_name: String,
+    refresh_interval: u32,
+    complications: EnabledComplications,
+    needs_redraw: bool,
+}
+
+/// LED-related state.
+struct LedState {
+    theme: u8,
+    intensity: u8,
+    speed: u8,
+    needs_update: bool,
+}
+
+/// Render pipeline state (canvas, framebuffer, PNG cache).
+struct RenderState {
+    canvas: Canvas,
+    framebuffer: Framebuffer,
+    cached_png: Option<Vec<u8>>,
+}
+
+/// Minimum interval between disk writes for display settings.
+const SAVE_DEBOUNCE_SECS: u64 = 5;
+
 /// Shared application state.
 pub struct AppState {
-    /// Configuration
-    config: RwLock<Config>,
+    /// Configuration (immutable after init)
+    config: Config,
 
     /// State directory for persisting runtime state
     state_dir: PathBuf,
 
-    /// LCD device (optional - may not be present)
-    lcd: Option<Mutex<LcdDevice>>,
+    /// LCD device (mutable Option for reconnection)
+    lcd: Mutex<Option<LcdDevice>>,
+
+    /// Timestamp of last LCD reconnection attempt
+    last_lcd_reconnect: Mutex<std::time::Instant>,
 
     /// LED device path
     led_device_path: String,
 
-    /// Current orientation
-    orientation: RwLock<Orientation>,
+    /// Display state
+    display: RwLock<DisplayState>,
 
-    /// Render canvas
-    canvas: RwLock<Canvas>,
+    /// LED state
+    led: RwLock<LedState>,
 
-    /// Output framebuffer
-    framebuffer: RwLock<Framebuffer>,
-
-    /// Flag indicating a redraw is needed
-    needs_redraw: RwLock<bool>,
-
-    /// Current LED settings
-    led_theme: RwLock<u8>,
-    led_intensity: RwLock<u8>,
-    led_speed: RwLock<u8>,
-
-    /// Flag indicating LED update is needed
-    needs_led_update: RwLock<bool>,
+    /// Render pipeline
+    render: RwLock<RenderState>,
 
     /// System sensors
     sensors: Mutex<Sensors>,
 
-    /// Current display face
-    face: RwLock<Box<dyn Face>>,
+    /// Save debouncing: set when a save is needed
+    save_pending: AtomicBool,
 
-    /// Current color theme name
-    theme_name: RwLock<String>,
-
-    /// Refresh interval in milliseconds (500-10000)
-    refresh_interval: RwLock<u32>,
-
-    /// Enabled complications per face (with options)
-    complications: RwLock<EnabledComplications>,
+    /// Timestamp of last save
+    last_save: Mutex<std::time::Instant>,
 }
 
 impl AppState {
@@ -252,16 +262,14 @@ impl AppState {
         // Try to open LCD device
         let lcd = match LcdDevice::open() {
             Ok(device) => {
-                // Send initial heartbeat to wake up the device
                 if let Err(e) = device.heartbeat() {
                     warn!("Failed to send initial heartbeat: {}", e);
                 }
-                // Always use hardware landscape mode - orientation is handled in software
                 if let Err(e) = device.set_orientation(Orientation::Landscape) {
                     warn!("Failed to set initial orientation: {}", e);
                 }
                 info!("LCD device opened successfully");
-                Some(Mutex::new(device))
+                Some(device)
             }
             Err(e) => {
                 warn!("LCD device not found: {}. Running in headless mode.", e);
@@ -288,7 +296,6 @@ impl AppState {
         let mut complications = settings.complications.clone();
         complications.init_from_defaults(face.as_ref());
 
-        // Migrate legacy ip_display setting to complication option
         if let Some(ref ip_display) = settings.ip_display {
             let face_name = face.name();
             complications.set_option(
@@ -300,7 +307,6 @@ impl AppState {
             info!("Migrated legacy ip_display setting: {}", ip_display);
         }
 
-        // Migrate legacy network_interface setting to complication option
         if let Some(ref network_interface) = settings.network_interface {
             let face_name = face.name();
             complications.set_option(
@@ -315,7 +321,6 @@ impl AppState {
             );
         }
 
-        // Get network interface from complications (or auto-detect)
         let network_interface_value = complications
             .get_option(
                 face.name(),
@@ -324,38 +329,54 @@ impl AppState {
             )
             .cloned();
 
-        // Initialize sensors - use complication setting or auto-detect
         let sensors = match network_interface_value.as_ref() {
             Some(iface) if iface != "auto" && !iface.is_empty() => Sensors::new(iface),
             _ => Sensors::new_auto(),
         };
 
-        // Load theme and set canvas background
         let theme = Theme::from_preset(&settings.theme);
         canvas.set_background(theme.background);
 
+        info!("State directory: {:?}", state_dir);
         info!("Display orientation: {}", orientation);
         info!("Theme: {}", settings.theme);
 
-        Ok(Self {
+        let now = std::time::Instant::now();
+
+        let app_state = Self {
             led_device_path: config.devices.led.clone(),
-            led_theme: RwLock::new(settings.led_theme),
-            led_intensity: RwLock::new(settings.led_intensity),
-            led_speed: RwLock::new(settings.led_speed),
+            config,
             state_dir,
-            config: RwLock::new(config),
-            lcd,
-            orientation: RwLock::new(orientation),
-            canvas: RwLock::new(canvas),
-            framebuffer: RwLock::new(framebuffer),
-            needs_redraw: RwLock::new(true),
-            needs_led_update: RwLock::new(true),
+            lcd: Mutex::new(lcd),
+            last_lcd_reconnect: Mutex::new(now),
+            display: RwLock::new(DisplayState {
+                orientation,
+                face,
+                theme_name: settings.theme,
+                refresh_interval: settings.refresh_interval,
+                complications,
+                needs_redraw: true,
+            }),
+            led: RwLock::new(LedState {
+                theme: settings.led_theme,
+                intensity: settings.led_intensity,
+                speed: settings.led_speed,
+                needs_update: true,
+            }),
+            render: RwLock::new(RenderState {
+                canvas,
+                framebuffer,
+                cached_png: None,
+            }),
             sensors: Mutex::new(sensors),
-            face: RwLock::new(face),
-            theme_name: RwLock::new(settings.theme),
-            refresh_interval: RwLock::new(settings.refresh_interval),
-            complications: RwLock::new(complications),
-        })
+            save_pending: AtomicBool::new(false),
+            last_save: Mutex::new(now),
+        };
+
+        // Save initial state so the file always exists
+        app_state.flush_display_settings();
+
+        Ok(app_state)
     }
 
     /// Loads display settings from state directory.
@@ -369,20 +390,35 @@ impl AppState {
         DisplaySettings::default()
     }
 
-    /// Saves display settings to state directory.
+    /// Marks that display settings need to be saved (debounced).
     fn save_display_settings(&self) {
+        self.save_pending.store(true, Ordering::Relaxed);
+    }
+
+    /// Flushes display settings to disk immediately.
+    fn flush_display_settings(&self) {
+        self.save_pending.store(false, Ordering::Relaxed);
+        *self.last_save.lock().unwrap() = std::time::Instant::now();
+
+        let display = self.display.read().unwrap();
+        let led = self.led.read().unwrap();
+
         let settings = DisplaySettings {
-            face: self.face.read().unwrap().name().to_string(),
-            orientation: self.orientation.read().unwrap().to_string(),
-            theme: self.theme_name.read().unwrap().clone(),
-            led_theme: *self.led_theme.read().unwrap(),
-            led_intensity: *self.led_intensity.read().unwrap(),
-            led_speed: *self.led_speed.read().unwrap(),
-            refresh_interval: *self.refresh_interval.read().unwrap(),
-            network_interface: None, // Legacy field, skip serializing
-            ip_display: None,        // Legacy field, skip serializing
-            complications: self.complications.read().unwrap().clone(),
+            face: display.face.name().to_string(),
+            orientation: display.orientation.to_string(),
+            theme: display.theme_name.clone(),
+            led_theme: led.theme,
+            led_intensity: led.intensity,
+            led_speed: led.speed,
+            refresh_interval: display.refresh_interval,
+            network_interface: None,
+            ip_display: None,
+            complications: display.complications.clone(),
         };
+
+        // Drop locks before disk I/O
+        drop(display);
+        drop(led);
 
         let settings_file = self.state_dir.join("display.toml");
         match toml::to_string_pretty(&settings) {
@@ -397,102 +433,120 @@ impl AppState {
         }
     }
 
-    /// Returns a reference to the configuration.
-    pub fn config(&self) -> Config {
-        self.config.read().unwrap().clone()
+    /// Flushes display settings if a save is pending and enough time has elapsed.
+    /// Called from the render loop.
+    pub fn maybe_flush_settings(&self) {
+        if self.save_pending.load(Ordering::Relaxed) {
+            let elapsed = self.last_save.lock().unwrap().elapsed();
+            if elapsed >= std::time::Duration::from_secs(SAVE_DEBOUNCE_SECS) {
+                self.flush_display_settings();
+            }
+        }
     }
 
-    /// Updates the configuration.
-    pub fn update_config<F>(&self, f: F)
-    where
-        F: FnOnce(&mut Config),
-    {
-        let mut config = self.config.write().unwrap();
-        f(&mut config);
+    /// Returns the configuration.
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Gets the current orientation.
     pub fn orientation(&self) -> Orientation {
-        *self.orientation.read().unwrap()
+        self.display.read().unwrap().orientation
     }
 
     /// Returns true if the LCD device is connected.
     pub fn is_lcd_connected(&self) -> bool {
-        self.lcd.is_some()
+        self.lcd.lock().unwrap().is_some()
     }
 
     /// Returns true if the web UI is enabled.
     pub fn is_web_enabled(&self) -> bool {
-        self.config.read().unwrap().web.enable
+        self.config.web.enable
+    }
+
+    /// Attempts to reconnect the LCD device if it's disconnected.
+    /// Returns true if connected (either already or newly).
+    fn try_lcd_reconnect(&self) -> bool {
+        let mut lcd = self.lcd.lock().unwrap();
+        if lcd.is_some() {
+            return true;
+        }
+
+        // Only attempt reconnection every 30 seconds
+        let mut last_attempt = self.last_lcd_reconnect.lock().unwrap();
+        if last_attempt.elapsed() < std::time::Duration::from_secs(30) {
+            return false;
+        }
+        *last_attempt = std::time::Instant::now();
+        drop(last_attempt);
+
+        match LcdDevice::open() {
+            Ok(device) => {
+                if let Err(e) = device.heartbeat() {
+                    warn!("Reconnected LCD but heartbeat failed: {}", e);
+                }
+                if let Err(e) = device.set_orientation(Orientation::Landscape) {
+                    warn!("Reconnected LCD but orientation set failed: {}", e);
+                }
+                info!("LCD device reconnected successfully");
+                *lcd = Some(device);
+                true
+            }
+            Err(_) => false,
+        }
     }
 
     /// Sets the display orientation.
     pub fn set_orientation(&self, orientation: Orientation) -> Result<()> {
-        // Always keep hardware in landscape mode - we handle orientation in software
-        if let Some(ref lcd) = self.lcd {
-            let device = lcd.lock().unwrap();
-            // Use hardware landscape mode always - portrait is handled via software rotation
-            device.set_orientation(Orientation::Landscape)?;
+        // Always keep hardware in landscape mode
+        {
+            let lcd = self.lcd.lock().unwrap();
+            if let Some(ref device) = *lcd {
+                device.set_orientation(Orientation::Landscape)?;
+            }
         }
-        *self.orientation.write().unwrap() = orientation;
 
-        // Resize canvas for the logical orientation (faces render to this)
         let (width, height) = orientation.dimensions();
         {
-            let mut canvas = self.canvas.write().unwrap();
-            canvas.resize(width as u32, height as u32);
-            canvas.clear(); // Clear to avoid stale content
+            let mut display = self.display.write().unwrap();
+            display.orientation = orientation;
+            display.needs_redraw = true;
         }
-        // Keep framebuffer at hardware native size (320x170) - we transform canvas into it
         {
-            let mut fb = self.framebuffer.write().unwrap();
-            fb.resize(320, 170);
-            fb.clear(0); // Clear to black
+            let mut render = self.render.write().unwrap();
+            render.canvas.resize(width as u32, height as u32);
+            render.canvas.clear();
+            render.framebuffer.resize(320, 170);
+            render.framebuffer.clear(0);
+            render.cached_png = None;
         }
 
-        *self.needs_redraw.write().unwrap() = true;
         self.save_display_settings();
         info!("Orientation set to: {}", orientation);
         Ok(())
     }
 
     /// Gets the current refresh interval in milliseconds.
-    pub fn refresh_interval(&self) -> u32 {
-        *self.refresh_interval.read().unwrap()
-    }
-
-    /// Gets the current refresh interval in milliseconds.
     pub fn refresh_interval_ms(&self) -> u32 {
-        *self.refresh_interval.read().unwrap()
-    }
-
-    /// Sets the refresh interval in milliseconds (clamped to 500-10000).
-    pub fn set_refresh_interval(&self, ms: u32) {
-        let clamped = ms.clamp(500, 10000);
-        *self.refresh_interval.write().unwrap() = clamped;
-        self.save_display_settings();
-        info!("Refresh interval set to {}ms", clamped);
+        self.display.read().unwrap().refresh_interval
     }
 
     /// Gets the current LED settings.
     pub fn led_settings(&self) -> (u8, u8, u8) {
-        (
-            *self.led_theme.read().unwrap(),
-            *self.led_intensity.read().unwrap(),
-            *self.led_speed.read().unwrap(),
-        )
+        let led = self.led.read().unwrap();
+        (led.theme, led.intensity, led.speed)
     }
 
     /// Sets the LED theme and parameters.
-    /// Always updates state, but logs an error if hardware communication fails.
     pub async fn set_led(&self, theme: u8, intensity: u8, speed: u8) -> Result<()> {
-        // Always update state so UI reflects user's choice
-        *self.led_theme.write().unwrap() = theme;
-        *self.led_intensity.write().unwrap() = intensity;
-        *self.led_speed.write().unwrap() = speed;
+        {
+            let mut led = self.led.write().unwrap();
+            led.theme = theme;
+            led.intensity = intensity;
+            led.speed = speed;
+        }
         self.save_display_settings();
 
-        // Try to send to hardware
         let led = LedDevice::new(&self.led_device_path);
         let led_theme = LedTheme::from_byte(theme)?;
         if let Err(e) = led.set_theme(led_theme, intensity, speed).await {
@@ -514,7 +568,10 @@ impl AppState {
     pub async fn led_off(&self) -> Result<()> {
         let led = LedDevice::new(&self.led_device_path);
         led.set_off().await?;
-        *self.led_theme.write().unwrap() = 4; // Off
+        {
+            let mut state = self.led.write().unwrap();
+            state.theme = 4; // Off
+        }
         self.save_display_settings();
         info!("LED turned off");
         Ok(())
@@ -522,8 +579,8 @@ impl AppState {
 
     /// Sends a heartbeat to the LCD device.
     pub fn send_heartbeat(&self) -> Result<()> {
-        if let Some(ref lcd) = self.lcd {
-            let device = lcd.lock().unwrap();
+        let lcd = self.lcd.lock().unwrap();
+        if let Some(ref device) = *lcd {
             device.heartbeat()?;
             debug!("Heartbeat sent");
         }
@@ -539,9 +596,10 @@ impl AppState {
 
     /// Gets the IP display preference from complications.
     fn get_ip_display_from_complications(&self) -> IpDisplayPreference {
-        let face_name = self.face.read().unwrap().name().to_string();
-        let complications = self.complications.read().unwrap();
-        complications
+        let display = self.display.read().unwrap();
+        let face_name = display.face.name().to_string();
+        display
+            .complications
             .get_option(
                 &face_name,
                 faces::complication_names::IP_ADDRESS,
@@ -551,84 +609,76 @@ impl AppState {
             .unwrap_or(IpDisplayPreference::Ipv6Gua)
     }
 
-    /// Gets the network interface from complications.
-    fn get_network_interface_from_complications(&self) -> Option<String> {
-        let face_name = self.face.read().unwrap().name().to_string();
-        let complications = self.complications.read().unwrap();
-        complications
-            .get_option(
-                &face_name,
-                faces::complication_names::NETWORK,
-                faces::complication_options::INTERFACE,
-            )
-            .filter(|s| *s != "auto" && !s.is_empty())
-            .cloned()
-    }
-
     /// Renders a frame and updates the display.
     pub async fn render_frame(&self) -> Result<()> {
-        // Always sample sensors and render the face (faces update every frame)
         let system_data = self.sample_sensors();
 
-        // Get theme from current preset
-        let theme = Theme::from_preset(&self.theme_name.read().unwrap());
-
+        // Render face to canvas
         {
-            // Get canvas and render face
-            let mut canvas = self.canvas.write().unwrap();
-            let face = self.face.read().unwrap();
-            let complications = self.complications.read().unwrap();
+            let display = self.display.read().unwrap();
+            let theme = Theme::from_preset(&display.theme_name);
+            let mut render = self.render.write().unwrap();
 
-            // Clear and render face
-            canvas.clear();
-            face.render(&mut canvas, &system_data, &theme, &complications);
+            render.canvas.clear();
+            display.face.render(
+                &mut render.canvas,
+                &system_data,
+                &theme,
+                &display.complications,
+            );
+
+            // Invalidate PNG cache
+            render.cached_png = None;
         }
 
-        // Render canvas to framebuffer with orientation transformation
+        // Transform canvas to framebuffer and send to LCD
         {
-            let canvas = self.canvas.read().unwrap();
-            let mut framebuffer = self.framebuffer.write().unwrap();
-            let orientation = *self.orientation.read().unwrap();
+            let orientation = self.display.read().unwrap().orientation;
+            let mut render = self.render.write().unwrap();
+            Self::render_to_framebuffer(&mut render, orientation)?;
 
-            // Transform canvas to framebuffer based on orientation
-            self.render_with_orientation(&canvas, &mut framebuffer, orientation)?;
-
-            // Send to LCD
-            if let Some(ref lcd) = self.lcd {
-                let device = lcd.lock().unwrap();
-                device.redraw(&framebuffer)?;
+            // Try to reconnect LCD if disconnected, then send
+            let lcd = self.lcd.lock().unwrap();
+            if let Some(ref device) = *lcd {
+                device.redraw(&render.framebuffer)?;
+            } else {
+                drop(lcd);
+                // Try reconnection (will rate-limit internally)
+                if self.try_lcd_reconnect() {
+                    let lcd = self.lcd.lock().unwrap();
+                    if let Some(ref device) = *lcd {
+                        device.redraw(&render.framebuffer)?;
+                    }
+                }
             }
         }
 
         // Handle LED updates
-        let needs_led = *self.needs_led_update.read().unwrap();
+        let needs_led = self.led.read().unwrap().needs_update;
         if needs_led {
             let (theme, intensity, speed) = self.led_settings();
             if let Err(e) = self.set_led(theme, intensity, speed).await {
-                tracing::warn!("LED update failed: {}", e);
+                warn!("LED update failed: {}", e);
             }
-            *self.needs_led_update.write().unwrap() = false;
+            self.led.write().unwrap().needs_update = false;
         }
+
+        // Flush settings if debounce timer has elapsed
+        self.maybe_flush_settings();
 
         Ok(())
     }
 
     /// Renders canvas to framebuffer with orientation transformation.
-    fn render_with_orientation(
-        &self,
-        canvas: &Canvas,
-        framebuffer: &mut Framebuffer,
-        orientation: Orientation,
-    ) -> Result<()> {
+    fn render_to_framebuffer(render: &mut RenderState, orientation: Orientation) -> Result<()> {
         use ht32_panel_hw::lcd::rgb888_to_rgb565;
 
-        let pixels = canvas.pixmap_pixels();
-        let fb_data = framebuffer.data_mut();
-        let (cw, ch) = canvas.dimensions();
+        let pixels = render.canvas.pixmap_pixels();
+        let fb_data = render.framebuffer.data_mut();
+        let (cw, ch) = render.canvas.dimensions();
 
         match orientation {
             Orientation::Landscape => {
-                // Direct copy - canvas is 320x170, framebuffer is 320x170
                 for (i, pixel) in pixels.iter().enumerate() {
                     if i < fb_data.len() {
                         fb_data[i] = rgb888_to_rgb565(pixel.red(), pixel.green(), pixel.blue());
@@ -636,7 +686,6 @@ impl AppState {
                 }
             }
             Orientation::LandscapeUpsideDown => {
-                // Copy reversed (180° rotation)
                 let len = fb_data.len();
                 for (i, pixel) in pixels.iter().enumerate() {
                     if i < len {
@@ -646,8 +695,6 @@ impl AppState {
                 }
             }
             Orientation::Portrait => {
-                // Canvas is 170x320, rotate 90° CW to get 320x170
-                // For each pixel at (x, y) in canvas, place at (ch - 1 - y, x) in framebuffer
                 for y in 0..ch {
                     for x in 0..cw {
                         let src_idx = (y * cw + x) as usize;
@@ -663,8 +710,6 @@ impl AppState {
                 }
             }
             Orientation::PortraitUpsideDown => {
-                // Canvas is 170x320, rotate 90° CCW to get 320x170
-                // For each pixel at (x, y) in canvas, place at (y, cw - 1 - x) in framebuffer
                 for y in 0..ch {
                     for x in 0..cw {
                         let src_idx = (y * cw + x) as usize;
@@ -686,15 +731,28 @@ impl AppState {
 
     /// Triggers a full redraw on the next frame.
     pub fn force_redraw(&self) {
-        *self.needs_redraw.write().unwrap() = true;
+        self.display.write().unwrap().needs_redraw = true;
     }
 
-    /// Returns the current canvas as PNG bytes.
-    /// This shows the logical orientation (portrait/landscape) as seen by the user.
+    /// Returns the current canvas as PNG bytes (cached).
     pub fn get_screen_png(&self) -> Result<Vec<u8>> {
-        let canvas = self.canvas.read().unwrap();
-        let (width, height) = canvas.dimensions();
-        let rgba = canvas.pixels();
+        // Check cache first
+        {
+            let render = self.render.read().unwrap();
+            if let Some(ref cached) = render.cached_png {
+                return Ok(cached.clone());
+            }
+        }
+
+        // Generate PNG and cache it
+        let mut render = self.render.write().unwrap();
+        // Double-check after acquiring write lock
+        if let Some(ref cached) = render.cached_png {
+            return Ok(cached.clone());
+        }
+
+        let (width, height) = render.canvas.dimensions();
+        let rgba = render.canvas.pixels();
 
         let mut png_data = Vec::new();
         {
@@ -705,48 +763,29 @@ impl AppState {
             writer.write_image_data(rgba)?;
         }
 
+        render.cached_png = Some(png_data.clone());
         Ok(png_data)
     }
 
     /// Clears the display to a color.
     pub fn clear_display(&self, color: u16) -> Result<()> {
         {
-            let mut fb = self.framebuffer.write().unwrap();
-            fb.clear(color);
+            let mut render = self.render.write().unwrap();
+            render.framebuffer.clear(color);
+            render.cached_png = None;
         }
         self.force_redraw();
         Ok(())
     }
 
-    /// Gets a mutable reference to the canvas.
-    pub fn with_canvas<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut Canvas) -> R,
-    {
-        let mut canvas = self.canvas.write().unwrap();
-        let result = f(&mut canvas);
-        *self.needs_redraw.write().unwrap() = true;
-        result
-    }
-
-    /// Gets a read reference to the canvas.
-    pub fn read_canvas<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&Canvas) -> R,
-    {
-        let canvas = self.canvas.read().unwrap();
-        f(&canvas)
-    }
-
     /// Sets the display face.
     pub fn set_face(&self, name: &str) -> Result<()> {
         if let Some(new_face) = faces::create_face(name) {
-            // Initialize complications from defaults for this face
-            {
-                let mut complications = self.complications.write().unwrap();
-                complications.init_from_defaults(new_face.as_ref());
-            }
-            *self.face.write().unwrap() = new_face;
+            let mut display = self.display.write().unwrap();
+            display.complications.init_from_defaults(new_face.as_ref());
+            display.face = new_face;
+            display.needs_redraw = true;
+            drop(display);
             self.save_display_settings();
             info!("Display face changed to: {}", name);
             Ok(())
@@ -757,26 +796,27 @@ impl AppState {
 
     /// Gets the current face name.
     pub fn face_name(&self) -> String {
-        self.face.read().unwrap().name().to_string()
+        self.display.read().unwrap().face.name().to_string()
     }
 
     /// Gets available complications for the current face.
     pub fn available_complications(&self) -> Vec<faces::Complication> {
-        self.face.read().unwrap().available_complications()
+        self.display.read().unwrap().face.available_complications()
     }
 
     /// Gets enabled complications for the current face.
     pub fn enabled_complications(&self) -> std::collections::HashSet<String> {
-        let face_name = self.face.read().unwrap().name().to_string();
-        self.complications.read().unwrap().get_enabled(&face_name)
+        let display = self.display.read().unwrap();
+        let face_name = display.face.name().to_string();
+        display.complications.get_enabled(&face_name)
     }
 
     /// Sets whether a complication is enabled for the current face.
     pub fn set_complication_enabled(&self, complication_id: &str, enabled: bool) -> Result<()> {
-        let face_name = self.face.read().unwrap().name().to_string();
-        let available: Vec<_> = self.face.read().unwrap().available_complications();
+        let mut display = self.display.write().unwrap();
+        let face_name = display.face.name().to_string();
+        let available = display.face.available_complications();
 
-        // Validate complication exists for this face
         if !available.iter().any(|c| c.id == complication_id) {
             return Err(anyhow::anyhow!(
                 "Unknown complication '{}' for face '{}'",
@@ -785,13 +825,13 @@ impl AppState {
             ));
         }
 
-        self.complications
-            .write()
-            .unwrap()
+        display
+            .complications
             .set_enabled(&face_name, complication_id, enabled);
-        self.save_display_settings();
-        *self.needs_redraw.write().unwrap() = true;
+        display.needs_redraw = true;
+        drop(display);
 
+        self.save_display_settings();
         info!(
             "Complication '{}' {} for face '{}'",
             complication_id,
@@ -803,26 +843,28 @@ impl AppState {
 
     /// Gets the current theme name.
     pub fn theme_name(&self) -> String {
-        self.theme_name.read().unwrap().clone()
+        self.display.read().unwrap().theme_name.clone()
     }
 
     /// Sets the theme by name.
     pub fn set_theme(&self, name: &str) -> Result<()> {
-        // Validate theme exists
         if !faces::available_themes().iter().any(|t| t.id == name) {
             return Err(anyhow::anyhow!("Unknown theme: {}", name));
         }
 
-        *self.theme_name.write().unwrap() = name.to_string();
+        {
+            let mut display = self.display.write().unwrap();
+            display.theme_name = name.to_string();
+            display.needs_redraw = true;
+        }
 
-        // Update canvas background
         let theme = Theme::from_preset(name);
-        self.canvas
-            .write()
-            .unwrap()
-            .set_background(theme.background);
+        {
+            let mut render = self.render.write().unwrap();
+            render.canvas.set_background(theme.background);
+            render.cached_png = None;
+        }
 
-        *self.needs_redraw.write().unwrap() = true;
         self.save_display_settings();
         info!("Theme set to: {}", name);
         Ok(())
@@ -831,74 +873,6 @@ impl AppState {
     /// Returns a list of available themes.
     pub fn available_themes(&self) -> Vec<faces::ThemeInfo> {
         faces::available_themes()
-    }
-
-    /// Gets the current display settings as a struct.
-    pub fn display_settings(&self) -> DisplaySettings {
-        DisplaySettings {
-            face: self.face.read().unwrap().name().to_string(),
-            orientation: self.orientation.read().unwrap().to_string(),
-            theme: self.theme_name.read().unwrap().clone(),
-            led_theme: *self.led_theme.read().unwrap(),
-            led_intensity: *self.led_intensity.read().unwrap(),
-            led_speed: *self.led_speed.read().unwrap(),
-            refresh_interval: *self.refresh_interval.read().unwrap(),
-            network_interface: None,
-            ip_display: None,
-            complications: self.complications.read().unwrap().clone(),
-        }
-    }
-
-    /// Gets the current IP display preference from complications.
-    pub fn ip_display(&self) -> IpDisplayPreference {
-        self.get_ip_display_from_complications()
-    }
-
-    /// Sets the IP display preference via complication option.
-    pub fn set_ip_display(&self, preference: IpDisplayPreference) {
-        let face_name = self.face.read().unwrap().name().to_string();
-        self.complications.write().unwrap().set_option(
-            &face_name,
-            faces::complication_names::IP_ADDRESS,
-            faces::complication_options::IP_TYPE,
-            preference.to_string(),
-        );
-        self.save_display_settings();
-        info!("IP display preference set to: {}", preference);
-    }
-
-    /// Gets the current network interface from complications (None if auto-detected).
-    pub fn network_interface(&self) -> Option<String> {
-        self.get_network_interface_from_complications()
-    }
-
-    /// Gets the currently active network interface name (resolved from auto if needed).
-    pub fn network_interface_config(&self) -> String {
-        let sensors = self.sensors.lock().unwrap();
-        sensors.network.interface_name().to_string()
-    }
-
-    /// Sets the network interface to monitor via complication option.
-    /// Pass None or "auto" to enable auto-detection.
-    pub fn set_network_interface(&self, interface: Option<String>) {
-        let face_name = self.face.read().unwrap().name().to_string();
-        let value = interface.clone().unwrap_or_else(|| "auto".to_string());
-        self.complications.write().unwrap().set_option(
-            &face_name,
-            faces::complication_names::NETWORK,
-            faces::complication_options::INTERFACE,
-            value.clone(),
-        );
-
-        // Update the sensor
-        let mut sensors = self.sensors.lock().unwrap();
-        if value == "auto" || value.is_empty() {
-            sensors.network.set_auto();
-        } else {
-            sensors.network.set_interface(&value);
-        }
-
-        self.save_display_settings();
     }
 
     /// Lists all available network interfaces.
@@ -912,10 +886,10 @@ impl AppState {
         complication_id: &str,
         option_id: &str,
     ) -> Option<String> {
-        let face_name = self.face.read().unwrap().name().to_string();
-        self.complications
-            .read()
-            .unwrap()
+        let display = self.display.read().unwrap();
+        let face_name = display.face.name().to_string();
+        display
+            .complications
             .get_option(&face_name, complication_id, option_id)
             .cloned()
     }
@@ -927,10 +901,10 @@ impl AppState {
         option_id: &str,
         value: &str,
     ) -> anyhow::Result<()> {
-        let face_name = self.face.read().unwrap().name().to_string();
-        let available = self.face.read().unwrap().available_complications();
+        let mut display = self.display.write().unwrap();
+        let face_name = display.face.name().to_string();
+        let available = display.face.available_complications();
 
-        // Validate complication exists
         let complication = available
             .iter()
             .find(|c| c.id == complication_id)
@@ -942,7 +916,6 @@ impl AppState {
                 )
             })?;
 
-        // Validate option exists
         let option = complication
             .options
             .iter()
@@ -955,10 +928,8 @@ impl AppState {
                 )
             })?;
 
-        // Validate value if it's a choice type
         if let faces::ComplicationOptionType::Choice(choices) = &option.option_type {
             if !choices.iter().any(|c| c.value == value) {
-                // Special case: network interface can be any valid interface
                 if complication_id == faces::complication_names::NETWORK
                     && option_id == faces::complication_options::INTERFACE
                 {
@@ -982,12 +953,11 @@ impl AppState {
             }
         }
 
-        self.complications.write().unwrap().set_option(
-            &face_name,
-            complication_id,
-            option_id,
-            value.to_string(),
-        );
+        display
+            .complications
+            .set_option(&face_name, complication_id, option_id, value.to_string());
+        display.needs_redraw = true;
+        drop(display);
 
         // Special handling for network interface changes
         if complication_id == faces::complication_names::NETWORK
@@ -1002,10 +972,12 @@ impl AppState {
         }
 
         self.save_display_settings();
-        *self.needs_redraw.write().unwrap() = true;
         info!(
             "Complication option '{}.{}' set to '{}' for face '{}'",
-            complication_id, option_id, value, face_name
+            complication_id,
+            option_id,
+            value,
+            self.face_name()
         );
         Ok(())
     }

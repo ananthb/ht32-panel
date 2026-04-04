@@ -69,8 +69,9 @@ impl LcdDevice {
             device_info.interface_number()
         );
 
-        // Initial cooldown period - device needs time to initialize after opening
-        // Reference implementation uses 1000ms delay before any commands
+        // Initial cooldown period - device needs time to initialize after opening.
+        // Reference implementation uses 1000ms delay before any commands.
+        // Uses blocking sleep since this only runs once at startup/reconnection.
         debug!("Waiting for device initialization (1s cooldown)...");
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
@@ -84,8 +85,14 @@ impl LcdDevice {
     pub fn open_path(path: &str) -> Result<Self> {
         let api = HidApi::new()?;
 
+        let c_path = std::ffi::CString::new(path).map_err(|_| {
+            Error::SerialIo(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("invalid device path: {}", path),
+            ))
+        })?;
         let device = api
-            .open_path(std::ffi::CString::new(path).unwrap().as_c_str())
+            .open_path(c_path.as_c_str())
             .map_err(|_| Error::LcdNotFound)?;
 
         info!("LCD device opened at path: {}", path);

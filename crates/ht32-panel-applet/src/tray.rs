@@ -67,21 +67,18 @@ impl Default for TrayState {
 /// The HT32 Panel tray icon.
 pub struct HT32PanelTray {
     state: Arc<Mutex<TrayState>>,
-    command_tx: mpsc::UnboundedSender<TrayCommand>,
+    command_tx: mpsc::Sender<TrayCommand>,
 }
 
 impl HT32PanelTray {
     /// Creates a new tray icon instance.
-    pub fn new(
-        state: Arc<Mutex<TrayState>>,
-        command_tx: mpsc::UnboundedSender<TrayCommand>,
-    ) -> Self {
+    pub fn new(state: Arc<Mutex<TrayState>>, command_tx: mpsc::Sender<TrayCommand>) -> Self {
         Self { state, command_tx }
     }
 
     fn set_led_theme(&mut self, index: usize) {
         if let Some((_, theme)) = LED_THEMES.get(index) {
-            if let Err(e) = self.command_tx.send(TrayCommand::SetLedTheme(*theme)) {
+            if let Err(e) = self.command_tx.try_send(TrayCommand::SetLedTheme(*theme)) {
                 debug!("Failed to send LED theme command: {}", e);
             }
             // Update local state immediately for UI feedback
@@ -95,7 +92,7 @@ impl HT32PanelTray {
         if let Some((_, orientation)) = ORIENTATIONS.get(index) {
             if let Err(e) = self
                 .command_tx
-                .send(TrayCommand::SetOrientation(orientation.to_string()))
+                .try_send(TrayCommand::SetOrientation(orientation.to_string()))
             {
                 debug!("Failed to send orientation command: {}", e);
             }
@@ -108,7 +105,10 @@ impl HT32PanelTray {
 
     fn set_face(&mut self, index: usize) {
         if let Some((_, face)) = FACES.get(index) {
-            if let Err(e) = self.command_tx.send(TrayCommand::SetFace(face.to_string())) {
+            if let Err(e) = self
+                .command_tx
+                .try_send(TrayCommand::SetFace(face.to_string()))
+            {
                 debug!("Failed to send face command: {}", e);
             }
             // Update local state immediately for UI feedback
@@ -136,7 +136,7 @@ impl HT32PanelTray {
         if !interface.is_empty() {
             if let Err(e) = self
                 .command_tx
-                .send(TrayCommand::SetNetworkInterface(interface.clone()))
+                .try_send(TrayCommand::SetNetworkInterface(interface.clone()))
             {
                 debug!("Failed to send network interface command: {}", e);
             }
@@ -152,7 +152,7 @@ impl HT32PanelTray {
     }
 
     fn quit_daemon(&self) {
-        if let Err(e) = self.command_tx.send(TrayCommand::QuitDaemon) {
+        if let Err(e) = self.command_tx.try_send(TrayCommand::QuitDaemon) {
             debug!("Failed to send quit command: {}", e);
         }
     }
@@ -349,11 +349,8 @@ impl Tray for HT32PanelTray {
 /// Creates the tray service and command receiver.
 pub fn create_tray(
     state: Arc<Mutex<TrayState>>,
-) -> anyhow::Result<(
-    TrayService<HT32PanelTray>,
-    mpsc::UnboundedReceiver<TrayCommand>,
-)> {
-    let (command_tx, command_rx) = mpsc::unbounded_channel();
+) -> anyhow::Result<(TrayService<HT32PanelTray>, mpsc::Receiver<TrayCommand>)> {
+    let (command_tx, command_rx) = mpsc::channel(16);
     let tray = HT32PanelTray::new(state, command_tx);
     let service = TrayService::new(tray);
     Ok((service, command_rx))

@@ -1,7 +1,5 @@
 //! Configuration management.
 
-#![allow(dead_code)]
-
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -180,13 +178,6 @@ impl Config {
             std::fs::read_to_string(path.as_ref()).context("Failed to read configuration file")?;
         let config: Config = toml::from_str(&content).context("Failed to parse configuration")?;
         Ok(config)
-    }
-
-    /// Saves configuration to a TOML file.
-    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let content = toml::to_string_pretty(self).context("Failed to serialize configuration")?;
-        std::fs::write(path.as_ref(), content).context("Failed to write configuration file")?;
-        Ok(())
     }
 }
 

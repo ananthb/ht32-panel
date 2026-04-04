@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     info!("Loaded configuration from: {}", config_path);
 
     // Initialize application state
-    let state = Arc::new(AppState::new(config.clone())?);
+    let state = Arc::new(AppState::new(config)?);
 
     // Create channels for D-Bus signals and shutdown
     let (signal_tx, _signal_rx) = broadcast::channel::<DaemonSignals>(16);
@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
     // Start D-Bus service
     let dbus_state = state.clone();
     let dbus_signal_tx = signal_tx.clone();
-    let dbus_bus_type = config.dbus.bus;
+    let dbus_bus_type = state.config().dbus.bus;
     let _dbus_connection =
         match dbus::run_dbus_server(dbus_state, dbus_signal_tx, shutdown_tx, dbus_bus_type).await {
             Ok(conn) => {
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
 
     // Start heartbeat loop
     let heartbeat_state = state.clone();
-    let heartbeat_interval = config.heartbeat;
+    let heartbeat_interval = state.config().heartbeat;
     tokio::spawn(async move {
         heartbeat_loop(heartbeat_state, heartbeat_interval).await;
     });
@@ -84,9 +84,10 @@ async fn main() -> Result<()> {
     let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
 
     // Optionally start web server
-    if config.web.enable {
+    if state.config().web.enable {
         let app = web::create_router(state.clone(), signal_tx.clone());
-        let addr: SocketAddr = config
+        let addr: SocketAddr = state
+            .config()
             .web
             .listen
             .parse()
@@ -135,7 +136,6 @@ async fn render_loop(state: Arc<AppState>) {
     loop {
         if let Err(e) = state.render_frame().await {
             consecutive_errors += 1;
-            // Only log errors once per minute or on first error
             let elapsed = last_error_log.elapsed();
             if consecutive_errors == 1 || elapsed >= std::time::Duration::from_secs(60) {
                 if consecutive_errors > 1 {
@@ -147,7 +147,6 @@ async fn render_loop(state: Arc<AppState>) {
                     warn!("Render error: {}", e);
                 }
                 last_error_log = std::time::Instant::now();
-                consecutive_errors = 0;
             }
         } else {
             consecutive_errors = 0;
@@ -177,7 +176,6 @@ async fn heartbeat_loop(state: Arc<AppState>, interval_ms: u64) {
                     warn!("Heartbeat error: {}", e);
                 }
                 last_error_log = std::time::Instant::now();
-                consecutive_errors = 0;
             }
         } else {
             consecutive_errors = 0;

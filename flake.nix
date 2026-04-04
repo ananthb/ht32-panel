@@ -4,13 +4,17 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+  outputs = { self, nixpkgs, flake-utils, git-hooks, rust-overlay }:
     let
       cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
       version = cargoToml.workspace.package.version;
@@ -56,6 +60,39 @@
             homepage = "https://github.com/ananthb/ht32-panel";
             license = licenses.agpl3Plus;
             platforms = [ "x86_64-linux" ];
+          };
+        };
+
+        pre-commit = git-hooks.lib.${system}.run {
+          src = ./.;
+          hooks = {
+            check-json.enable = true;
+            check-merge-conflicts.enable = true;
+            check-toml.enable = true;
+            check-yaml.enable = true;
+            clippy = {
+              enable = true;
+              entry = let
+                depsPath = pkgs.lib.makeBinPath ([ rustToolchain ] ++ nativeBuildInputs);
+                pkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig"
+                  (map (p: if p ? dev then p.dev else p) appletBuildInputs);
+              in toString (pkgs.writeShellScript "clippy-hook" ''
+                export PATH="${depsPath}''${PATH:+:$PATH}"
+                export PKG_CONFIG_PATH="${pkgConfigPath}"
+                cargo clippy --workspace --all-targets --offline -- -D warnings
+              '');
+              files = "\\.rs$";
+              types = [ "file" ];
+              pass_filenames = false;
+            };
+            detect-private-keys.enable = true;
+            end-of-file-fixer.enable = true;
+            rustfmt = {
+              enable = true;
+              packageOverrides.cargo = rustToolchain;
+              packageOverrides.rustfmt = rustToolchain;
+            };
+            trim-trailing-whitespace.enable = true;
           };
         };
 
@@ -204,6 +241,8 @@ APPRUN
         };
 
         checks = {
+          inherit pre-commit;
+
           fmt = pkgs.runCommand "check-fmt" {
             nativeBuildInputs = [ rustToolchain ];
             src = self;
@@ -254,6 +293,7 @@ APPRUN
           RUST_LOG = "info";
 
           shellHook = ''
+            ${pre-commit.shellHook}
             echo ""
             echo "HT32 Panel Development Environment"
             echo ""

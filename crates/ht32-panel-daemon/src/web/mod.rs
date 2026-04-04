@@ -239,12 +239,26 @@ struct OrientationForm {
 async fn orientation_set(
     State(state): State<WebState>,
     Form(form): Form<OrientationForm>,
-) -> impl IntoResponse {
-    if let Ok(orientation) = form.orientation.parse::<Orientation>() {
-        let _ = state.app.set_orientation(orientation);
+) -> Response {
+    let orientation = match form.orientation.parse::<Orientation>() {
+        Ok(o) => o,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Invalid orientation: {}", e),
+            )
+                .into_response();
+        }
+    };
+    if let Err(e) = state.app.set_orientation(orientation) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to set orientation: {}", e),
+        )
+            .into_response();
     }
     let current = state.app.orientation().to_string();
-    Html(OrientationTemplate { current }.render().unwrap())
+    Html(OrientationTemplate { current }.render().unwrap()).into_response()
 }
 
 /// GET /face - Face controls partial
@@ -267,8 +281,14 @@ struct FaceForm {
 }
 
 /// POST /face - Set face
-async fn face_set(State(state): State<WebState>, Form(form): Form<FaceForm>) -> impl IntoResponse {
-    let _ = state.app.set_face(&form.face);
+async fn face_set(State(state): State<WebState>, Form(form): Form<FaceForm>) -> Response {
+    if let Err(e) = state.app.set_face(&form.face) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to set face: {}", e),
+        )
+            .into_response();
+    }
     let current = state.app.face_name();
     let faces: Vec<FaceOption> = available_faces()
         .iter()
@@ -277,7 +297,7 @@ async fn face_set(State(state): State<WebState>, Form(form): Form<FaceForm>) -> 
             display_name: f.display_name.to_string(),
         })
         .collect();
-    Html(FaceTemplate { current, faces }.render().unwrap())
+    Html(FaceTemplate { current, faces }.render().unwrap()).into_response()
 }
 
 /// GET /led - LED controls partial
@@ -356,11 +376,14 @@ struct ThemeForm {
 }
 
 /// POST /theme - Set theme
-async fn theme_set(
-    State(state): State<WebState>,
-    Form(form): Form<ThemeForm>,
-) -> impl IntoResponse {
-    let _ = state.app.set_theme(&form.theme);
+async fn theme_set(State(state): State<WebState>, Form(form): Form<ThemeForm>) -> Response {
+    if let Err(e) = state.app.set_theme(&form.theme) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to set theme: {}", e),
+        )
+            .into_response();
+    }
     let current = state.app.theme_name();
     let themes: Vec<ThemeOption> = available_themes()
         .iter()
@@ -369,7 +392,7 @@ async fn theme_set(
             display_name: t.display_name.to_string(),
         })
         .collect();
-    Html(ThemeTemplate { current, themes }.render().unwrap())
+    Html(ThemeTemplate { current, themes }.render().unwrap()).into_response()
 }
 
 /// GET /preview - Preview image partial
@@ -501,14 +524,21 @@ struct ComplicationForm {
 async fn complications_set(
     State(state): State<WebState>,
     Form(form): Form<ComplicationForm>,
-) -> impl IntoResponse {
+) -> Response {
     let enabled = form.enabled.as_deref() == Some("on");
-    let _ = state
+    if let Err(e) = state
         .app
-        .set_complication_enabled(&form.complication, enabled);
+        .set_complication_enabled(&form.complication, enabled)
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to toggle complication: {}", e),
+        )
+            .into_response();
+    }
 
     // Re-render the complications list
-    render_complications(&state.app)
+    render_complications(&state.app).into_response()
 }
 
 /// Form data for complication option.
@@ -523,13 +553,20 @@ struct ComplicationOptionForm {
 async fn complication_option_set(
     State(state): State<WebState>,
     Form(form): Form<ComplicationOptionForm>,
-) -> impl IntoResponse {
-    let _ = state
+) -> Response {
+    if let Err(e) = state
         .app
-        .set_complication_option(&form.complication, &form.option, &form.value);
+        .set_complication_option(&form.complication, &form.option, &form.value)
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to set complication option: {}", e),
+        )
+            .into_response();
+    }
 
     // Re-render the complications list
-    render_complications(&state.app)
+    render_complications(&state.app).into_response()
 }
 
 /// Helper to render the complications template
