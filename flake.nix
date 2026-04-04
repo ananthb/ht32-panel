@@ -241,8 +241,6 @@ APPRUN
         };
 
         checks = {
-          inherit pre-commit;
-
           fmt = pkgs.runCommand "check-fmt" {
             nativeBuildInputs = [ rustToolchain ];
             src = self;
