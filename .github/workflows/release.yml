@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -19,14 +20,62 @@ jobs:
             extra-substituters = https://cache.garnix.io
             extra-trusted-public-keys = cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=
 
+      - uses: sigstore/cosign-installer@v3
+
       - name: Build release artifacts
-        run: nix build .#release
+        run: nix build .#release -o result-release
+
+      - name: Build deb and rpm packages
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          dir="pkg-amd64"
+          mkdir -p "$dir"
+
+          # Extract binaries from tarball
+          tar -xzf "$(readlink result-release)/ht32-panel-${VERSION}-x86_64-linux.tar.gz" -C "${dir}"
+
+          # Copy packaging files
+          cp packaging/nfpm.yaml packaging/nfpm-gui.yaml "${dir}/"
+          cp packaging/ht32-panel.gpg packaging/ht32-panel.sources packaging/ht32-panel.repo "${dir}/"
+          cp packaging/ht32-panel.service packaging/99-ht32-panel.rules "${dir}/"
+          cp config/default.toml "${dir}/config.toml"
+          cp packaging/org.ht32panel.Daemon.desktop "${dir}/"
+
+          # Build daemon + CLI package
+          cd "${dir}"
+          ARCH="amd64" VERSION="$VERSION" nix shell nixpkgs#nfpm -c \
+            nfpm package -p deb -f nfpm.yaml
+          ARCH="x86_64" VERSION="$VERSION" nix shell nixpkgs#nfpm -c \
+            nfpm package -p rpm -f nfpm.yaml
+
+          # Build applet package
+          ARCH="amd64" VERSION="$VERSION" nix shell nixpkgs#nfpm -c \
+            nfpm package -p deb -f nfpm-gui.yaml
+          ARCH="x86_64" VERSION="$VERSION" nix shell nixpkgs#nfpm -c \
+            nfpm package -p rpm -f nfpm-gui.yaml
+          cd ..
+
+          # Collect all artifacts
+          mkdir -p dist
+          cp result-release/* dist/
+          mv pkg-amd64/*.deb pkg-amd64/*.rpm dist/
+
+      - name: Generate checksums and sign
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          for f in *; do
+            cosign sign-blob --yes \
+              --output-signature "${f}.sig" \
+              --output-certificate "${f}.pem" \
+              "$f"
+          done
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            result/*
+          files: dist/*
           generate_release_notes: true
 
   publish:

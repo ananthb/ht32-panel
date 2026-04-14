@@ -1,0 +1,110 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            extra-substituters = https://cache.garnix.io
+            extra-trusted-public-keys = cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=
+
+      - name: Build API documentation
+        run: nix develop -c cargo doc --workspace --no-deps --all-features
+
+      - name: Assemble site
+        run: |
+          mkdir -p site/images
+          cp doc/*.html site/
+          cp images/*.png site/images/
+          cp packaging/org.ht32panel.Daemon.svg site/
+          mv target/doc site/api
+
+      # Package repository generation
+      - name: Import GPG key
+        if: hashFiles('packaging/GPG-KEY') != ''
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+
+      - name: Build apt repository
+        if: hashFiles('packaging/GPG-KEY') != ''
+        run: |
+          mkdir -p site/deb/pool site/deb/dists/stable/main/binary-amd64
+
+          # Download .deb packages from latest release
+          gh release download --pattern '*.deb' --dir site/deb/pool/ || true
+
+          if ls site/deb/pool/*.deb 1>/dev/null 2>&1; then
+            cd site/deb
+
+            # Generate Packages file
+            dpkg-scanpackages --arch amd64 pool/ > dists/stable/main/binary-amd64/Packages
+            gzip -k dists/stable/main/binary-amd64/Packages
+
+            # Generate Release file
+            cd dists/stable
+            apt-ftparchive release . > Release
+
+            # GPG sign
+            gpg --batch --yes --armor --detach-sign --output Release.gpg Release
+            gpg --batch --yes --clearsign --output InRelease Release
+            cd ../..
+
+            # Include public key
+            cp ../../packaging/GPG-KEY KEY.gpg
+
+            cd ../..
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Build rpm repository
+        if: hashFiles('packaging/GPG-KEY') != ''
+        run: |
+          mkdir -p site/rpm/packages
+
+          # Download .rpm packages from latest release
+          gh release download --pattern '*.rpm' --dir site/rpm/packages/ || true
+
+          if ls site/rpm/packages/*.rpm 1>/dev/null 2>&1; then
+            nix shell nixpkgs#createrepo_c -c createrepo_c site/rpm/
+
+            # Sign repomd.xml
+            gpg --batch --yes --armor --detach-sign \
+              --output site/rpm/repodata/repomd.xml.asc \
+              site/rpm/repodata/repomd.xml
+
+            # Include public key
+            cp packaging/GPG-KEY site/rpm/RPM-GPG-KEY-ht32-panel
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

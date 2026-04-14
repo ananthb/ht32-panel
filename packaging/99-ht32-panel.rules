@@ -1,0 +1,6 @@
+# HT32 Panel LCD (VID:PID 04D9:FD01)
+SUBSYSTEM=="usb", ATTR{idVendor}=="04d9", ATTR{idProduct}=="fd01", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04d9", ATTRS{idProduct}=="fd01", MODE="0660", GROUP="plugdev"
+
+# CH340 serial adapter for LED strip
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE="0660", GROUP="plugdev", SYMLINK+="ht32-led"

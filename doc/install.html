@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install &amp; Run - HT32 Panel</title>
+<style>
+  :root { --bg: #fff; --fg: #1a1a1a; --muted: #666; --accent: #2b6cb0; --code-bg: #f5f5f5; --border: #e2e2e2; --max-w: 740px; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1a1a1a; --fg: #e0e0e0; --muted: #999; --accent: #63b3ed; --code-bg: #2d2d2d; --border: #404040; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+  .container { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  h1 small { font-size: 1rem; color: var(--muted); font-weight: normal; }
+  h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+  p { margin: 0.5rem 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; }
+  pre code { background: none; padding: 0; }
+  nav { display: flex; gap: 1.5rem; margin: 1rem 0; flex-wrap: wrap; }
+  nav a { padding: 0.4rem 0.8rem; background: var(--code-bg); border-radius: 4px; font-weight: 500; }
+  .badges { display: flex; gap: 0.5rem; margin: 0.5rem 0; flex-wrap: wrap; }
+  .badges img { height: 20px; }
+  pre[class*="language-"], code[class*="language-"] { background: var(--code-bg) !important; }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" media="(prefers-color-scheme: dark)">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nix.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js"></script>
+</head>
+<body>
+<div class="container">
+<h1>Install &amp; Run <small>HT32 Panel</small></h1>
+
+<nav>
+  <a href="index.html">&larr; Home</a>
+  <a href="config.html">Configuration</a>
+  <a href="https://github.com/ananthb/ht32-panel/releases">Releases</a>
+</nav>
+
+<p>Download the latest release from
+<a href="https://github.com/ananthb/ht32-panel/releases">GitHub Releases</a>
+or use one of the methods below.</p>
+
+<h2>Debian / Ubuntu</h2>
+<pre><code class="language-bash"># Download and install the .deb package
+curl -LO https://github.com/ananthb/ht32-panel/releases/latest/download/ht32-panel_VERSION_amd64.deb
+sudo dpkg -i ht32-panel_VERSION_amd64.deb
+sudo apt-get install -f</code></pre>
+<p>The package automatically configures the apt repository for future updates.
+Run <code>sudo apt update &amp;&amp; sudo apt upgrade</code> to receive new versions.</p>
+
+<h2>Fedora / RHEL</h2>
+<pre><code class="language-bash"># Download and install the .rpm package
+curl -LO https://github.com/ananthb/ht32-panel/releases/latest/download/ht32-panel-VERSION.x86_64.rpm
+sudo dnf install ./ht32-panel-VERSION.x86_64.rpm</code></pre>
+<p>The package automatically configures the dnf repository for future updates.
+Run <code>sudo dnf upgrade</code> to receive new versions.</p>
+
+<h2>AppImage</h2>
+<pre><code class="language-bash"># Download and run the AppImage
+curl -LO https://github.com/ananthb/ht32-panel/releases/latest/download/ht32-panel-VERSION-x86_64.AppImage
+chmod +x ht32-panel-*-x86_64.AppImage
+./ht32-panel-*-x86_64.AppImage</code></pre>
+
+<h2>Tarball</h2>
+<pre><code class="language-bash"># Download and extract the tarball
+curl -LO https://github.com/ananthb/ht32-panel/releases/latest/download/ht32-panel-VERSION-x86_64-linux.tar.gz
+tar -xzf ht32-panel-*-x86_64-linux.tar.gz
+
+# Run with a config file
+./ht32paneld /etc/ht32-panel/config.toml</code></pre>
+
+<h2>NixOS (System Service)</h2>
+<p>Add the flake input to your NixOS flake:</p>
+<pre><code class="language-nix">{
+  inputs.ht32-panel.url = "github:ananthb/ht32-panel";
+}</code></pre>
+<p>Then enable the module in your NixOS configuration:</p>
+<pre><code class="language-nix">{ inputs, ... }:
+{
+  imports = [ inputs.ht32-panel.nixosModules.default ];
+
+  services.ht32-panel = {
+    enable = true;
+  };
+}</code></pre>
+
+<h2>Home Manager (User Service)</h2>
+<p>Run the daemon as a user service with the session D-Bus bus.</p>
+<p>Add the flake input:</p>
+<pre><code class="language-nix">{
+  inputs.ht32-panel.url = "github:ananthb/ht32-panel";
+}</code></pre>
+<p>In your Home Manager configuration:</p>
+<pre><code class="language-nix">{ inputs, ... }:
+{
+  imports = [ inputs.ht32-panel.homeManagerModules.default ];
+
+  services.ht32-panel = {
+    enable = true;
+    applet.enable = true;  # optional system tray applet
+  };
+}</code></pre>
+<p>For hardware access, also add udev rules to your NixOS configuration:</p>
+<pre><code class="language-nix">{ inputs, ... }:
+{
+  imports = [ inputs.ht32-panel.nixosModules.udevRules ];
+
+  services.ht32-panel.udevRules = {
+    enable = true;
+    group = "users";  # grant access to users group
+  };
+}</code></pre>
+
+<h2>Nix</h2>
+<pre><code class="language-bash"># Run directly from the flake
+nix run github:ananthb/ht32-panel</code></pre>
+
+<h2>From Source</h2>
+<pre><code class="language-bash">git clone https://github.com/ananthb/ht32-panel
+cd ht32-panel
+cargo build --release</code></pre>
+
+<h2>Usage</h2>
+<pre><code class="language-bash"># Start the daemon
+ht32paneld config/default.toml
+
+# CLI (requires daemon to be running)
+ht32panelctl lcd orientation landscape
+ht32panelctl led set rainbow --intensity 3 --speed 3</code></pre>
+
+</div>
+</body>
+</html>

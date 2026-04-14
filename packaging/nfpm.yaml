@@ -1,0 +1,58 @@
+name: ht32-panel
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+maintainer: Ananth Bhaskararaman <ab@calculon.tech>
+description: Front-panel display and LED control for mini PCs with HT32-based LCD
+vendor: HT32 Panel Contributors
+homepage: https://github.com/ananthb/ht32-panel
+license: AGPL-3.0-or-later
+
+contents:
+  - src: ./ht32paneld
+    dst: /usr/bin/ht32paneld
+    file_info:
+      mode: 0755
+
+  - src: ./ht32panelctl
+    dst: /usr/bin/ht32panelctl
+    file_info:
+      mode: 0755
+
+  - src: ./ht32-panel.service
+    dst: /usr/lib/systemd/system/ht32-panel.service
+    type: config
+
+  - src: ./config.toml
+    dst: /etc/ht32-panel/config.toml.example
+
+  - src: ./99-ht32-panel.rules
+    dst: /etc/udev/rules.d/99-ht32-panel.rules
+
+  - dst: /etc/ht32-panel
+    type: dir
+    file_info:
+      mode: 0750
+
+  # apt repository config — auto-configures updates
+  - src: ./ht32-panel.gpg
+    dst: /usr/share/keyrings/ht32-panel.gpg
+    packager: deb
+
+  - src: ./ht32-panel.sources
+    dst: /etc/apt/sources.list.d/ht32-panel.sources
+    type: config
+    packager: deb
+
+  # dnf/yum repository config — auto-configures updates
+  - src: ./ht32-panel.repo
+    dst: /etc/yum.repos.d/ht32-panel.repo
+    type: config
+    packager: rpm
+
+deb:
+  compression: zstd
+
+rpm:
+  compression: zstd
+  group: Applications/System

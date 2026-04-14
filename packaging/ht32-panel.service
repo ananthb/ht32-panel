@@ -1,0 +1,24 @@
+[Unit]
+Description=HT32 Panel Daemon
+After=network.target dbus.service
+Requires=dbus.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ht32paneld /etc/ht32-panel/config.toml
+Restart=on-failure
+RestartSec=5
+
+StateDirectory=ht32-panel
+StateDirectoryMode=0750
+
+PrivateTmp=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+# Device access (USB HID + serial)
+SupplementaryGroups=plugdev dialout
+
+[Install]
+WantedBy=multi-user.target

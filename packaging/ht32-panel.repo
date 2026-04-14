@@ -1,0 +1,6 @@
+[ht32-panel]
+name=HT32 Panel
+baseurl=https://ananthb.github.io/ht32-panel/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://ananthb.github.io/ht32-panel/rpm/RPM-GPG-KEY-ht32-panel

@@ -1,0 +1,32 @@
+name: ht32-panel-applet
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+maintainer: Ananth Bhaskararaman <ab@calculon.tech>
+description: System tray applet for HT32 Panel display and LED control
+vendor: HT32 Panel Contributors
+homepage: https://github.com/ananthb/ht32-panel
+license: AGPL-3.0-or-later
+
+depends:
+  - ht32-panel
+
+contents:
+  - src: ./ht32-panel-applet
+    dst: /usr/bin/ht32-panel-applet
+    file_info:
+      mode: 0755
+
+  - src: ./org.ht32panel.Daemon.desktop
+    dst: /usr/share/applications/org.ht32panel.Daemon.desktop
+
+  - src: ./org.ht32panel.Daemon.desktop
+    dst: /etc/xdg/autostart/org.ht32panel.Daemon.desktop
+    type: config
+
+deb:
+  compression: zstd
+
+rpm:
+  compression: zstd
+  group: Applications/System
