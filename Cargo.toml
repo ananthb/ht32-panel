@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 license = "AGPL-3.0-or-later"
 authors = ["Ananth Bhaskararaman <ab@calculon.tech>"]
@@ -17,8 +17,8 @@ repository = "https://github.com/ananthb/ht32-panel"
 
 [workspace.dependencies]
 # Internal crates
-ht32-panel-hw = { version = "0.8.0", path = "crates/ht32-panel-hw" }
-ht32-panel-client = { version = "0.8.0", path = "crates/ht32-panel-client" }
+ht32-panel-hw = { version = "0.8.1", path = "crates/ht32-panel-hw" }
+ht32-panel-client = { version = "0.8.1", path = "crates/ht32-panel-client" }
 
 # Hardware
 # Use libusb backend on Linux to match reference implementation

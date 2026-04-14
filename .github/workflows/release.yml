@@ -33,7 +33,7 @@ jobs:
           mkdir -p "$dir"
 
           # Extract binaries from tarball
-          tar -xzf "$(readlink result-release)/ht32-panel-${VERSION}-x86_64-linux.tar.gz" -C "${dir}"
+          tar -xzf "$(ls $(readlink result-release)/*.tar.gz)" -C "${dir}"
 
           # Copy packaging files
           cp packaging/nfpm.yaml packaging/nfpm-gui.yaml "${dir}/"
