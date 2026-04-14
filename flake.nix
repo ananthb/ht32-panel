@@ -129,12 +129,16 @@
             pkg = self.packages.${system}.default;
             applet = self.packages.${system}.ht32-panel-applet;
           in pkgs.runCommand "ht32-panel-${version}-x86_64-linux.tar.gz" {
-            nativeBuildInputs = [ pkgs.gzip ];
+            nativeBuildInputs = [ pkgs.gzip pkgs.patchelf ];
           } ''
             mkdir -p dist/config
             cp ${pkg}/bin/ht32paneld dist/
             cp ${pkg}/bin/ht32panelctl dist/
             cp ${applet}/bin/ht32-panel-applet dist/
+            chmod +w dist/ht32paneld dist/ht32panelctl dist/ht32-panel-applet
+            patchelf --remove-rpath dist/ht32paneld
+            patchelf --remove-rpath dist/ht32panelctl
+            patchelf --remove-rpath dist/ht32-panel-applet
             cp -r ${pkg}/share/ht32-panel/config/* dist/config/
             tar -czvf $out -C dist .
           '';
@@ -148,8 +152,7 @@
               hash = "sha256-L8qLRDySUQ8Ug6iD9gBhrQm0a5eLJjHIB82HOkfsJg0=";
             };
 
-            # Collect all runtime library dependencies
-            libPath = pkgs.lib.makeLibraryPath (with pkgs; [
+            libDeps = with pkgs; [
               hidapi
               libusb1
               udev
@@ -178,20 +181,34 @@
               xorg.libxcb
               libxkbcommon
               wayland
-            ]);
+            ];
           in pkgs.runCommand "ht32-panel-${version}-x86_64.AppImage" {
             nativeBuildInputs = with pkgs; [ squashfsTools patchelf ];
           } ''
             # Create AppDir structure
             mkdir -p AppDir/usr/bin
+            mkdir -p AppDir/usr/lib
             mkdir -p AppDir/usr/share/applications
             mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
 
-            # Copy binaries
+            # Copy binaries and strip Nix RPATH
             cp ${pkg}/bin/ht32paneld AppDir/usr/bin/
             cp ${pkg}/bin/ht32panelctl AppDir/usr/bin/
             cp ${applet}/bin/ht32-panel-applet AppDir/usr/bin/
             chmod +w AppDir/usr/bin/*
+            patchelf --remove-rpath AppDir/usr/bin/ht32paneld
+            patchelf --remove-rpath AppDir/usr/bin/ht32panelctl
+            patchelf --remove-rpath AppDir/usr/bin/ht32-panel-applet
+
+            # Bundle shared libraries so the AppImage is self-contained.
+            for dir in ${pkgs.lib.concatStringsSep " " (map (d: "${d}/lib") libDeps)}; do
+              if [ -d "$dir" ]; then
+                for so in "$dir"/*.so "$dir"/*.so.*; do
+                  [ -e "$so" ] || continue
+                  cp -n "$(readlink -f "$so")" "AppDir/usr/lib/$(basename "$so")" 2>/dev/null || true
+                done
+              fi
+            done
 
             # Desktop file at root (required by AppImage spec)
             cp ${./packaging/org.ht32panel.Daemon.desktop} AppDir/ht32-panel.desktop
@@ -209,8 +226,7 @@ set -e
 SELF=$(readlink -f "$0")
 APPDIR=''${SELF%/*}
 
-# Set library path for bundled binaries
-export LD_LIBRARY_PATH="LIBPATH:''${LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="''${APPDIR}/usr/lib:''${LD_LIBRARY_PATH}"
 
 # GTK/GLib settings
 export GSETTINGS_SCHEMA_DIR="/usr/share/glib-2.0/schemas:''${GSETTINGS_SCHEMA_DIR}"
@@ -218,7 +234,6 @@ export GDK_PIXBUF_MODULE_FILE="/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
 
 exec "''${APPDIR}/usr/bin/ht32-panel-applet" "$@"
 APPRUN
-            sed -i "s|LIBPATH|${libPath}|g" AppDir/AppRun
             chmod +x AppDir/AppRun
 
             # Create squashfs
