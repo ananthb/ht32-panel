@@ -12,7 +12,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: DeterminateSystems/nix-installer-action@main
         with:
@@ -73,7 +73,7 @@ jobs:
           done
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: DeterminateSystems/nix-installer-action@main
         with:
@@ -91,22 +91,32 @@ jobs:
             extra-trusted-public-keys = cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=
 
       - name: Publish ht32-panel-hw
-        run: nix develop -c cargo publish -p ht32-panel-hw --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: nix develop -c cargo publish -p ht32-panel-hw
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Wait for crates.io indexing
         run: sleep 30
 
       - name: Publish ht32-panel-client
-        run: nix develop -c cargo publish -p ht32-panel-client --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: nix develop -c cargo publish -p ht32-panel-client
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Wait for crates.io indexing
         run: sleep 30
 
       - name: Publish ht32-panel-daemon
-        run: nix develop -c cargo publish -p ht32-panel-daemon --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: nix develop -c cargo publish -p ht32-panel-daemon
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish ht32-panel-cli
-        run: nix develop -c cargo publish -p ht32-panel-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: nix develop -c cargo publish -p ht32-panel-cli
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish ht32-panel-applet
-        run: nix develop -c cargo publish -p ht32-panel-applet --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: nix develop -c cargo publish -p ht32-panel-applet
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
