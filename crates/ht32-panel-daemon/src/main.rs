@@ -159,27 +159,13 @@ async fn render_loop(state: Arc<AppState>) {
 
 async fn heartbeat_loop(state: Arc<AppState>, interval_ms: u64) {
     let interval = std::time::Duration::from_millis(interval_ms);
-    let mut consecutive_errors: u32 = 0;
-    let mut last_error_log = std::time::Instant::now();
 
     loop {
         tokio::time::sleep(interval).await;
+        // Write failures are counted, throttled and escalated by LcdHealth inside
+        // send_heartbeat; this returns Err only for unexpected faults.
         if let Err(e) = state.send_heartbeat() {
-            consecutive_errors += 1;
-            let elapsed = last_error_log.elapsed();
-            if consecutive_errors == 1 || elapsed >= std::time::Duration::from_secs(60) {
-                if consecutive_errors > 1 {
-                    warn!(
-                        "Heartbeat error (repeated {} times in {:?}): {}",
-                        consecutive_errors, elapsed, e
-                    );
-                } else {
-                    warn!("Heartbeat error: {}", e);
-                }
-                last_error_log = std::time::Instant::now();
-            }
-        } else {
-            consecutive_errors = 0;
+            warn!("Heartbeat loop error: {}", e);
         }
     }
 }

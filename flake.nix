@@ -47,6 +47,12 @@
           libappindicator-gtk3
         ]);
 
+        # Where the dynamic loader lives on an FHS distro. Release artifacts are
+        # built by Nix but must run on Debian/Ubuntu/Fedora, so their PT_INTERP
+        # is rewritten from the /nix/store path to this one. The binaries need
+        # glibc >= 2.39 (the highest symbol version they reference).
+        fhsInterpreter = "/lib64/ld-linux-x86-64.so.2";
+
         cargoArgs = {
           pname = "ht32-panel";
           inherit version;
@@ -136,9 +142,33 @@
             cp ${pkg}/bin/ht32panelctl dist/
             cp ${applet}/bin/ht32-panel-applet dist/
             chmod +w dist/ht32paneld dist/ht32panelctl dist/ht32-panel-applet
-            patchelf --remove-rpath dist/ht32paneld
-            patchelf --remove-rpath dist/ht32panelctl
-            patchelf --remove-rpath dist/ht32-panel-applet
+            # Nix builds bake an absolute /nix/store PT_INTERP into every binary.
+            # On a non-Nix host that path does not exist, so execve fails with
+            # ENOENT and the shell reports "cannot execute: required file not
+            # found". Point the loader at the FHS path instead and drop the
+            # store RPATH so libraries resolve from the system.
+            for b in dist/ht32paneld dist/ht32panelctl dist/ht32-panel-applet; do
+              patchelf --remove-rpath "$b"
+              patchelf --set-interpreter ${fhsInterpreter} "$b"
+            done
+
+            # Guard: nothing in the shipped binaries may still point at /nix/store.
+            # patchelf is trusted above but never checked; if it ever fails to
+            # strip an RPATH (a DT_RUNPATH where it wrote DT_RPATH, a format it
+            # does not handle) the artifact ships pointing into a store that does
+            # not exist on the user's machine, and the binary dies before main
+            # with a message that explains nothing. Fail the build instead.
+            for b in dist/ht32paneld dist/ht32panelctl dist/ht32-panel-applet; do
+              interp=$(patchelf --print-interpreter "$b")
+              case "$interp" in
+                /nix/store/*) echo "FATAL: $b still has a Nix interpreter: $interp" >&2; exit 1 ;;
+              esac
+              rpath=$(patchelf --print-rpath "$b")
+              if [ -n "$rpath" ]; then
+                echo "FATAL: $b still has an RPATH after patchelf: $rpath" >&2
+                exit 1
+              fi
+            done
             cp -r ${pkg}/share/ht32-panel/config/* dist/config/
             tar -czvf $out -C dist .
           '';
@@ -196,9 +226,13 @@
             cp ${pkg}/bin/ht32panelctl AppDir/usr/bin/
             cp ${applet}/bin/ht32-panel-applet AppDir/usr/bin/
             chmod +w AppDir/usr/bin/*
-            patchelf --remove-rpath AppDir/usr/bin/ht32paneld
-            patchelf --remove-rpath AppDir/usr/bin/ht32panelctl
-            patchelf --remove-rpath AppDir/usr/bin/ht32-panel-applet
+            # Same /nix/store PT_INTERP problem as the tarball: without this the
+            # AppImage cannot exec on any non-Nix host.
+            for b in AppDir/usr/bin/ht32paneld AppDir/usr/bin/ht32panelctl \
+                     AppDir/usr/bin/ht32-panel-applet; do
+              patchelf --remove-rpath "$b"
+              patchelf --set-interpreter ${fhsInterpreter} "$b"
+            done
 
             # Bundle shared libraries so the AppImage is self-contained.
             for dir in ${pkgs.lib.concatStringsSep " " (map (d: "${d}/lib") libDeps)}; do

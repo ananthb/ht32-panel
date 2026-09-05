@@ -1,17 +1,20 @@
 # HT32 Panel Daemon Configuration
 
-# Web Server Configuration
-[web]
-# Enable the web server (disabled by default)
-enable = false
-# Server listen address
-listen = "[::1]:8686"
+# NOTE: TOML is section-scoped. Every bare key below belongs to the most recent
+# [section] header, so top-level settings must stay ABOVE the first one.
 
 # Display refresh interval (milliseconds, 500-10000)
 refresh_interval = 2500
 
 # Heartbeat interval (milliseconds)
 heartbeat = 1000
+
+# Web Server Configuration
+[web]
+# Enable the web server (disabled by default)
+enable = false
+# Server listen address
+listen = "[::1]:8686"
 
 # Device Configuration
 [devices]
