@@ -30,6 +30,7 @@
   th, td { border: 1px solid var(--border); padding: 0.4rem 0.8rem; text-align: left; }
   th { background: var(--code-bg); }
   pre[class*="language-"], code[class*="language-"] { background: var(--code-bg) !important; }
+  .note { border-left: 3px solid var(--accent); background: var(--code-bg); padding: 0.75rem 1rem; border-radius: 0 4px 4px 0; margin: 1rem 0; }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" media="(prefers-color-scheme: light)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -55,7 +56,24 @@ command-line argument:</p>
 
 <h2>Default Configuration</h2>
 <p>The full default configuration file:</p>
+<div class="note">
+  <strong>Key order matters.</strong> TOML scopes every bare key to the most
+  recent <code>[section]</code> header. Top-level settings such as
+  <code>refresh_interval</code> and <code>heartbeat</code> must appear
+  <em>above</em> the first section header &mdash; written underneath one they are
+  read as part of that section and silently ignored. Since 0.9.0 the daemon logs
+  a warning naming any key it had to ignore.
+</div>
+
 <pre><code class="language-toml"># HT32 Panel Daemon Configuration
+
+# Top-level settings must stay above the first [section] header.
+
+# Display refresh interval (milliseconds, 500-10000)
+refresh_interval = 2500
+
+# Heartbeat interval (milliseconds)
+heartbeat = 1000
 
 # Web Server Configuration
 [web]
@@ -63,12 +81,6 @@ command-line argument:</p>
 enable = false
 # Server listen address
 listen = "[::1]:8686"
-
-# Display refresh interval (milliseconds, 500-10000)
-refresh_interval = 2500
-
-# Heartbeat interval (milliseconds)
-heartbeat = 1000
 
 # Device Configuration
 [devices]
@@ -103,6 +115,19 @@ height = 170</code></pre>
 <table>
   <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
   <tr><td><code>heartbeat</code></td><td>integer</td><td><code>1000</code></td><td>Heartbeat interval in milliseconds</td></tr>
+</table>
+
+<h3>LCD Resilience</h3>
+<p>Top-level keys controlling how the daemon recovers when the panel stops
+accepting writes &mdash; a USB drop, a re-enumeration, or the device being claimed
+by another process. The defaults suit a normally-behaving panel; lower the
+threshold only if you want faster recovery at the cost of more reopen churn.</p>
+<table>
+  <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>lcd_failure_threshold</code></td><td>integer</td><td><code>10</code></td><td>Consecutive write failures before the handle is dropped and the device reopened</td></tr>
+  <tr><td><code>lcd_reconnect_interval_ms</code></td><td>integer</td><td><code>5000</code></td><td>Minimum interval between reopen attempts</td></tr>
+  <tr><td><code>lcd_exit_after_ms</code></td><td>integer</td><td><code>300000</code></td><td>How long the panel may stay dark before the daemon exits for systemd to relaunch it. <code>0</code> disables this escalation</td></tr>
+  <tr><td><code>lcd_error_log_interval_ms</code></td><td>integer</td><td><code>60000</code></td><td>Minimum interval between write-error log lines, so a failing panel cannot flood the journal</td></tr>
 </table>
 
 <h3><code>[devices]</code> &mdash; Hardware Devices</h3>

@@ -3,6 +3,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use tracing::{debug, warn};
 
 /// Main configuration structure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -203,11 +204,85 @@ fn default_height() -> u32 {
     170
 }
 
+/// Keys that belong at the top level of the file (above any `[section]`).
+const TOP_LEVEL_KEYS: &[&str] = &[
+    "state_dir",
+    "refresh_interval",
+    "heartbeat",
+    "lcd_failure_threshold",
+    "lcd_reconnect_interval_ms",
+    "lcd_exit_after_ms",
+    "lcd_error_log_interval_ms",
+];
+
+/// Each `[section]` and the keys it accepts.
+const TABLE_KEYS: &[(&str, &[&str])] = &[
+    ("web", &["enable", "listen"]),
+    ("dbus", &["bus"]),
+    ("devices", &["lcd", "led"]),
+    ("canvas", &["width", "height"]),
+];
+
+/// Finds keys the daemon will silently ignore.
+///
+/// TOML is section-scoped: a top-level key written *below* a `[section]` header
+/// is parsed as a member of that section, and serde then drops it because the
+/// section's struct has no such field. The setting looks present in the file but
+/// has no effect. This walks the parsed document and reports every ignored key,
+/// calling out that specific mistake so the fix is obvious.
+fn unknown_key_warnings(doc: &toml::Value) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let Some(root) = doc.as_table() else {
+        return warnings;
+    };
+
+    for (key, value) in root {
+        if let Some(table) = value.as_table() {
+            // A known section: check the keys inside it.
+            if let Some((_, allowed)) = TABLE_KEYS.iter().find(|(name, _)| name == key) {
+                for inner in table.keys() {
+                    if allowed.contains(&inner.as_str()) {
+                        continue;
+                    }
+                    if TOP_LEVEL_KEYS.contains(&inner.as_str()) {
+                        warnings.push(format!(
+                            "`{inner}` is set under [{key}] and is being IGNORED: it is a \
+                             top-level setting, so it must appear ABOVE the first [section] \
+                             header in the file"
+                        ));
+                    } else {
+                        warnings.push(format!("unknown key `{inner}` under [{key}] is ignored"));
+                    }
+                }
+            } else {
+                warnings.push(format!("unknown section [{key}] is ignored"));
+            }
+        } else if !TOP_LEVEL_KEYS.contains(&key.as_str()) {
+            warnings.push(format!("unknown top-level key `{key}` is ignored"));
+        }
+    }
+
+    warnings.sort();
+    warnings
+}
+
 impl Config {
     /// Loads configuration from a TOML file.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content =
             std::fs::read_to_string(path.as_ref()).context("Failed to read configuration file")?;
+
+        // Warn (don't fail) about settings that parse but will never be applied,
+        // so an upgrade never dies on a stale config file.
+        match toml::from_str::<toml::Value>(&content) {
+            Ok(doc) => {
+                for w in unknown_key_warnings(&doc) {
+                    warn!("Config: {}", w);
+                }
+            }
+            Err(e) => debug!("Could not pre-scan config for unknown keys: {}", e),
+        }
+
         let config: Config = toml::from_str(&content).context("Failed to parse configuration")?;
         Ok(config)
     }
@@ -234,6 +309,60 @@ impl Default for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The shipped example must keep top-level keys above the first [section],
+    /// otherwise TOML scopes them into that section and they are silently
+    /// dropped. This is the exact defect that made `heartbeat` un-settable.
+    #[test]
+    fn shipped_default_config_applies_its_own_values() {
+        let text = include_str!("../../../config/default.toml");
+        let cfg: Config = toml::from_str(text).expect("default.toml must parse");
+
+        assert_eq!(cfg.refresh_interval, 2500);
+        assert_eq!(cfg.heartbeat, 1000);
+        assert_eq!(cfg.canvas.width, 320);
+        assert_eq!(cfg.devices.lcd, "auto");
+
+        let doc: toml::Value = toml::from_str(text).unwrap();
+        assert!(
+            unknown_key_warnings(&doc).is_empty(),
+            "shipped default.toml has ignored keys: {:?}",
+            unknown_key_warnings(&doc)
+        );
+    }
+
+    /// A non-default value in the file must actually reach the daemon.
+    #[test]
+    fn top_level_heartbeat_is_honoured() {
+        let cfg: Config = toml::from_str("heartbeat = 30000\n[web]\nenable = false\n").unwrap();
+        assert_eq!(cfg.heartbeat, 30000);
+    }
+
+    /// Raja's report: `heartbeat` written under [web] parses fine but is dropped.
+    /// We cannot make it apply (that would change TOML semantics) but we must say so.
+    #[test]
+    fn heartbeat_misplaced_under_web_is_reported() {
+        let text = "[web]\nenable = false\nheartbeat = 30000\n";
+        let cfg: Config = toml::from_str(text).unwrap();
+        assert_eq!(cfg.heartbeat, 1000, "misplaced key must not apply");
+
+        let doc: toml::Value = toml::from_str(text).unwrap();
+        let warnings = unknown_key_warnings(&doc);
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].contains("heartbeat") && warnings[0].contains("IGNORED"),
+            "unhelpful warning: {}",
+            warnings[0]
+        );
+    }
+
+    #[test]
+    fn unknown_keys_and_sections_are_reported() {
+        let doc: toml::Value =
+            toml::from_str("bogus = 1\n[web]\ntypo = true\n[nope]\nx = 1\n").unwrap();
+        let warnings = unknown_key_warnings(&doc);
+        assert_eq!(warnings.len(), 3, "got: {warnings:?}");
+    }
 
     #[test]
     fn resilience_defaults_are_sane() {
