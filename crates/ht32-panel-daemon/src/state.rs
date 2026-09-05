@@ -10,10 +10,11 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, RwLock};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
 use crate::faces::{self, EnabledComplications, Face, Theme};
+use crate::lcd_health::{LcdHealth, WriteAction};
 use crate::rendering::Canvas;
 use crate::sensors::{
     data::{IpDisplayPreference, SystemData},
@@ -222,6 +223,9 @@ pub struct AppState {
     /// Timestamp of last LCD reconnection attempt
     last_lcd_reconnect: Mutex<std::time::Instant>,
 
+    /// LCD write-health tracker (failure counting, exit timing, log throttle)
+    lcd_health: Mutex<LcdHealth>,
+
     /// LED device path
     led_device_path: String,
 
@@ -342,6 +346,11 @@ impl AppState {
         info!("Theme: {}", settings.theme);
 
         let now = std::time::Instant::now();
+        let lcd_health = LcdHealth::new(
+            config.lcd_failure_threshold,
+            std::time::Duration::from_millis(config.lcd_exit_after_ms),
+            std::time::Duration::from_millis(config.lcd_error_log_interval_ms),
+        );
 
         let app_state = Self {
             led_device_path: config.devices.led.clone(),
@@ -349,6 +358,7 @@ impl AppState {
             state_dir,
             lcd: Mutex::new(lcd),
             last_lcd_reconnect: Mutex::new(now),
+            lcd_health: Mutex::new(lcd_health),
             display: RwLock::new(DisplayState {
                 orientation,
                 face,
@@ -472,9 +482,11 @@ impl AppState {
             return true;
         }
 
-        // Only attempt reconnection every 30 seconds
+        // Rate-limit reopen attempts (configurable via lcd_reconnect_interval_ms).
         let mut last_attempt = self.last_lcd_reconnect.lock().unwrap();
-        if last_attempt.elapsed() < std::time::Duration::from_secs(30) {
+        if last_attempt.elapsed()
+            < std::time::Duration::from_millis(self.config.lcd_reconnect_interval_ms)
+        {
             return false;
         }
         *last_attempt = std::time::Instant::now();
@@ -577,12 +589,56 @@ impl AppState {
         Ok(())
     }
 
+    /// Records a device-write failure: throttled log, demote-to-None on a
+    /// sustained streak, and exit-to-systemd as a last resort.
+    fn on_write_failure(&self, what: &str, err: &dyn std::fmt::Display) {
+        let now = std::time::Instant::now();
+        let (action, count, should_exit) = {
+            let mut health = self.lcd_health.lock().unwrap();
+            let action = health.record_failure();
+            let count = health.consecutive_failures();
+            let should_exit = health.should_exit(now);
+            if let Some(c) = health.should_log(now) {
+                if c > 1 {
+                    warn!("{} error (x{} consecutive): {}", what, c, err);
+                } else {
+                    warn!("{} error: {}", what, err);
+                }
+            }
+            (action, count, should_exit)
+        };
+
+        if action == WriteAction::Demote {
+            warn!("LCD unresponsive after {count} consecutive failures; dropping handle to reconnect");
+            *self.lcd.lock().unwrap() = None; // drop LcdDevice -> releases the libusb/usbfs claim
+        }
+        if should_exit {
+            error!("LCD has been dark too long; exiting so systemd relaunches a fresh process");
+            std::process::exit(1);
+        }
+    }
+
+    /// Records a successful device write (resets the failure streak).
+    fn on_write_success(&self) {
+        self.lcd_health
+            .lock()
+            .unwrap()
+            .record_success(std::time::Instant::now());
+    }
+
     /// Sends a heartbeat to the LCD device.
     pub fn send_heartbeat(&self) -> Result<()> {
-        let lcd = self.lcd.lock().unwrap();
-        if let Some(ref device) = *lcd {
-            device.heartbeat()?;
-            debug!("Heartbeat sent");
+        let result = {
+            let lcd = self.lcd.lock().unwrap();
+            lcd.as_ref().map(|device| device.heartbeat())
+        };
+        match result {
+            Some(Ok(())) => {
+                debug!("Heartbeat sent");
+                self.on_write_success();
+            }
+            Some(Err(e)) => self.on_write_failure("Heartbeat", &e),
+            None => {}
         }
         Ok(())
     }
@@ -637,17 +693,30 @@ impl AppState {
             let mut render = self.render.write().unwrap();
             Self::render_to_framebuffer(&mut render, orientation)?;
 
-            // Try to reconnect LCD if disconnected, then send
-            let lcd = self.lcd.lock().unwrap();
-            if let Some(ref device) = *lcd {
-                device.redraw(&render.framebuffer)?;
-            } else {
-                drop(lcd);
-                // Try reconnection (will rate-limit internally)
-                if self.try_lcd_reconnect() {
-                    let lcd = self.lcd.lock().unwrap();
-                    if let Some(ref device) = *lcd {
-                        device.redraw(&render.framebuffer)?;
+            // Send to LCD; record the outcome for health tracking.
+            let send_result = {
+                let lcd = self.lcd.lock().unwrap();
+                lcd.as_ref().map(|device| device.redraw(&render.framebuffer))
+            };
+            match send_result {
+                Some(Ok(())) => self.on_write_success(),
+                Some(Err(e)) => self.on_write_failure("Render", &e),
+                None => {
+                    // Disconnected: attempt a (rate-limited) reopen, then redraw.
+                    if self.try_lcd_reconnect() {
+                        let lcd = self.lcd.lock().unwrap();
+                        if let Some(ref device) = *lcd {
+                            match device.redraw(&render.framebuffer) {
+                                Ok(()) => {
+                                    drop(lcd);
+                                    self.on_write_success();
+                                }
+                                Err(e) => {
+                                    drop(lcd);
+                                    self.on_write_failure("Render", &e);
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -50,11 +50,13 @@ impl LcdDevice {
             );
         }
 
-        // Find the interface we need (interface 1 for display data)
+        // The display data interface is interface 1 (output-only, libusb-backed):
+        // the kernel creates no hidraw node for it, so it must be opened directly.
+        // Interface 0 is the consumer-control input device; never write display
+        // data there, so do not fall back to an arbitrary interface.
         let device_info = devices
             .iter()
             .find(|d| d.interface_number() == LCD_INTERFACE)
-            .or_else(|| devices.first()) // Fallback to first device if interface 2 not found
             .ok_or(Error::LcdNotFound)?;
 
         let device = device_info.open_device(&api).map_err(|e| {

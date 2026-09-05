@@ -5,6 +5,7 @@
 mod config;
 mod dbus;
 mod faces;
+mod lcd_health;
 mod rendering;
 mod sensors;
 mod state;

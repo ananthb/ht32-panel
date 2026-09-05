@@ -27,6 +27,22 @@ pub struct Config {
     #[serde(default = "default_heartbeat")]
     pub heartbeat: u64,
 
+    /// Consecutive LCD write failures before declaring a disconnect.
+    #[serde(default = "default_lcd_failure_threshold")]
+    pub lcd_failure_threshold: u32,
+
+    /// Minimum interval between LCD reopen attempts (ms).
+    #[serde(default = "default_lcd_reconnect_interval_ms")]
+    pub lcd_reconnect_interval_ms: u64,
+
+    /// Dark-time before exiting for systemd to relaunch (ms); 0 disables.
+    #[serde(default = "default_lcd_exit_after_ms")]
+    pub lcd_exit_after_ms: u64,
+
+    /// Throttled error-log cadence (ms).
+    #[serde(default = "default_lcd_error_log_interval_ms")]
+    pub lcd_error_log_interval_ms: u64,
+
     /// Device configuration
     #[serde(default)]
     pub devices: DevicesConfig,
@@ -155,6 +171,22 @@ fn default_heartbeat() -> u64 {
     1000
 }
 
+fn default_lcd_failure_threshold() -> u32 {
+    10
+}
+
+fn default_lcd_reconnect_interval_ms() -> u64 {
+    5_000
+}
+
+fn default_lcd_exit_after_ms() -> u64 {
+    300_000
+}
+
+fn default_lcd_error_log_interval_ms() -> u64 {
+    60_000
+}
+
 fn default_lcd_device() -> String {
     "auto".to_string()
 }
@@ -189,8 +221,26 @@ impl Default for Config {
             state_dir: default_state_dir(),
             refresh_interval: default_refresh_interval(),
             heartbeat: default_heartbeat(),
+            lcd_failure_threshold: default_lcd_failure_threshold(),
+            lcd_reconnect_interval_ms: default_lcd_reconnect_interval_ms(),
+            lcd_exit_after_ms: default_lcd_exit_after_ms(),
+            lcd_error_log_interval_ms: default_lcd_error_log_interval_ms(),
             devices: DevicesConfig::default(),
             canvas: CanvasConfig::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resilience_defaults_are_sane() {
+        let c = Config::default();
+        assert_eq!(c.lcd_failure_threshold, 10);
+        assert_eq!(c.lcd_reconnect_interval_ms, 5_000);
+        assert_eq!(c.lcd_exit_after_ms, 300_000);
+        assert_eq!(c.lcd_error_log_interval_ms, 60_000);
     }
 }
