@@ -5,6 +5,25 @@ use thiserror::Error;
 /// Result type alias using our Error type.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Turns hidapi's non-message into something a user can act on.
+///
+/// The LCD's display interface has no `hidraw` node, so this crate builds hidapi
+/// against its libusb backend. That backend does not implement `hid_error()`, so
+/// every failed transfer stringifies as the literal placeholder
+/// "hid_error is not implemented yet" — which told operators nothing about a
+/// panel that had simply dropped off the bus. Substitute the real meaning.
+fn describe_hid_error(err: &hidapi::HidError) -> String {
+    let msg = err.to_string();
+    if msg.contains("not implemented yet") {
+        "the USB transfer failed and hidapi's libusb backend reports no detail; \
+         the panel most likely disconnected, was re-enumerated, or is claimed by \
+         another process"
+            .to_string()
+    } else {
+        msg
+    }
+}
+
 /// Errors that can occur when interacting with the hardware.
 #[derive(Error, Debug)]
 pub enum Error {
@@ -17,7 +36,7 @@ pub enum Error {
     LedNotFound(String),
 
     /// USB HID communication error.
-    #[error("USB HID error: {0}")]
+    #[error("USB HID error: {}", describe_hid_error(.0))]
     Hid(#[from] hidapi::HidError),
 
     /// Serial port communication error.

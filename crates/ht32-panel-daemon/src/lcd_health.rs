@@ -45,10 +45,16 @@ impl LcdHealth {
     }
 
     /// Record a successful device write.
+    ///
+    /// Deliberately does NOT reset the log throttle. A panel that is failing
+    /// intermittently alternates success/failure, and clearing the throttle on
+    /// each success made every subsequent failure look like the first one — which
+    /// is what floods the journal with a "Heartbeat error" line every few seconds
+    /// even though the throttle interval is a minute. The throttle is purely
+    /// time-based so a flapping device costs at most one line per interval.
     pub fn record_success(&mut self, now: Instant) {
         self.consecutive_failures = 0;
         self.last_success = Some(now);
-        self.last_error_log = None;
     }
 
     /// Record a failed device write; returns whether to demote.
@@ -154,13 +160,23 @@ mod tests {
     }
 
     #[test]
-    fn success_reenables_immediate_logging() {
+    fn flapping_device_does_not_defeat_the_log_throttle() {
+        // A panel that alternates success/failure must not produce a log line per
+        // failure: the throttle is time-based and a success does not reset it.
         let t = Instant::now();
         let mut h = health();
         h.record_failure();
-        h.should_log(t);
-        h.record_success(t + Duration::from_secs(1));
+        assert_eq!(h.should_log(t), Some(1)); // first failure logs
+
+        for i in 1..10 {
+            let now = t + Duration::from_secs(i * 5);
+            h.record_success(now);
+            h.record_failure();
+            assert_eq!(h.should_log(now), None, "flap at {i} should stay throttled");
+        }
+
+        // Once the interval genuinely elapses, one line is allowed through again.
         h.record_failure();
-        assert_eq!(h.should_log(t + Duration::from_secs(2)), Some(1));
+        assert!(h.should_log(t + Duration::from_secs(61)).is_some());
     }
 }

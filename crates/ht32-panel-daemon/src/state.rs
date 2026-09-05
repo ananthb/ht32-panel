@@ -609,7 +609,9 @@ impl AppState {
         };
 
         if action == WriteAction::Demote {
-            warn!("LCD unresponsive after {count} consecutive failures; dropping handle to reconnect");
+            warn!(
+                "LCD unresponsive after {count} consecutive failures; dropping handle to reconnect"
+            );
             *self.lcd.lock().unwrap() = None; // drop LcdDevice -> releases the libusb/usbfs claim
         }
         if should_exit {
@@ -696,7 +698,8 @@ impl AppState {
             // Send to LCD; record the outcome for health tracking.
             let send_result = {
                 let lcd = self.lcd.lock().unwrap();
-                lcd.as_ref().map(|device| device.redraw(&render.framebuffer))
+                lcd.as_ref()
+                    .map(|device| device.redraw(&render.framebuffer))
             };
             match send_result {
                 Some(Ok(())) => self.on_write_success(),
