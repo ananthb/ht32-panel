@@ -50,6 +50,21 @@
 <a href="https://github.com/ananthb/ht32-panel/releases">GitHub Releases</a>
 or use one of the methods below.</p>
 
+<h2>Requirements</h2>
+<p>The prebuilt x86-64 binaries (deb, rpm, AppImage and tarball) are dynamically
+linked and need:</p>
+<ul>
+  <li><strong>glibc 2.39 or newer</strong> &mdash; Ubuntu 24.04+, Debian 13+,
+      Fedora 40+. On anything older, build from source instead.</li>
+  <li><code>libusb-1.0</code> for the daemon and CLI
+      (<code>libusb-1.0-0</code> on Debian/Ubuntu), and <code>libdbus-1</code>
+      for the tray applet. The deb and rpm packages pull these in for you.</li>
+</ul>
+<p>Releases before 0.9.0 shipped binaries whose ELF interpreter still pointed
+into <code>/nix/store</code>, so they failed on non-NixOS hosts with
+<code>cannot execute: required file not found</code>. Upgrade to 0.9.0 or later
+if you hit that.</p>
+
 <h2>Debian / Ubuntu</h2>
 <pre><code class="language-bash"># Download and install the .deb package
 curl -LO https://github.com/ananthb/ht32-panel/releases/latest/download/ht32-panel_VERSION_amd64.deb

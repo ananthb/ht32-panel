@@ -11,6 +11,18 @@ license: AGPL-3.0-or-later
 depends:
   - ht32-panel
 
+# The applet links libdbus-1 dynamically.
+overrides:
+  deb:
+    depends:
+      - ht32-panel
+      - libc6 (>= 2.39)
+      - libdbus-1-3
+  rpm:
+    depends:
+      - ht32-panel
+      - libdbus-1.so.3()(64bit)
+
 contents:
   - src: ./ht32-panel-applet
     dst: /usr/bin/ht32-panel-applet

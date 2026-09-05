@@ -8,6 +8,17 @@ vendor: HT32 Panel Contributors
 homepage: https://github.com/ananthb/ht32-panel
 license: AGPL-3.0-or-later
 
+# The daemon links libusb-1.0 dynamically (hidapi itself is static).
+# Without these the binary installs fine and then fails to start.
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.39)
+      - libusb-1.0-0
+  rpm:
+    depends:
+      - libusb-1.0.so.0()(64bit)
+
 contents:
   - src: ./ht32paneld
     dst: /usr/bin/ht32paneld
