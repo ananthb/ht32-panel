@@ -40,6 +40,7 @@ jobs:
           cp packaging/nfpm.yaml packaging/nfpm-gui.yaml "${dir}/"
           cp packaging/ht32-panel.gpg packaging/ht32-panel.sources packaging/ht32-panel.repo "${dir}/"
           cp packaging/ht32-panel.service packaging/99-ht32-panel.rules "${dir}/"
+          cp packaging/org.ht32panel.Daemon.conf packaging/postinstall.sh "${dir}/"
           cp config/default.toml "${dir}/config.toml"
           cp packaging/org.ht32panel.Daemon.desktop "${dir}/"
 

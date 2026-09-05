@@ -29,6 +29,10 @@ contents:
   - src: ./99-ht32-panel.rules
     dst: /etc/udev/rules.d/99-ht32-panel.rules
 
+  # D-Bus system-bus policy so the daemon can own org.ht32panel.Daemon
+  - src: ./org.ht32panel.Daemon.conf
+    dst: /usr/share/dbus-1/system.d/org.ht32panel.Daemon.conf
+
   - dst: /etc/ht32-panel
     type: dir
     file_info:
@@ -49,6 +53,9 @@ contents:
     dst: /etc/yum.repos.d/ht32-panel.repo
     type: config
     packager: rpm
+
+scripts:
+  postinstall: ./postinstall.sh
 
 deb:
   compression: zstd
