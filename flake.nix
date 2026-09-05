@@ -153,11 +153,21 @@
             done
 
             # Guard: nothing in the shipped binaries may still point at /nix/store.
+            # patchelf is trusted above but never checked; if it ever fails to
+            # strip an RPATH (a DT_RUNPATH where it wrote DT_RPATH, a format it
+            # does not handle) the artifact ships pointing into a store that does
+            # not exist on the user's machine, and the binary dies before main
+            # with a message that explains nothing. Fail the build instead.
             for b in dist/ht32paneld dist/ht32panelctl dist/ht32-panel-applet; do
               interp=$(patchelf --print-interpreter "$b")
               case "$interp" in
                 /nix/store/*) echo "FATAL: $b still has a Nix interpreter: $interp" >&2; exit 1 ;;
               esac
+              rpath=$(patchelf --print-rpath "$b")
+              if [ -n "$rpath" ]; then
+                echo "FATAL: $b still has an RPATH after patchelf: $rpath" >&2
+                exit 1
+              fi
             done
             cp -r ${pkg}/share/ht32-panel/config/* dist/config/
             tar -czvf $out -C dist .
