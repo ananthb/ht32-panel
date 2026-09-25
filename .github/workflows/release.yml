@@ -91,6 +91,11 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: release
+    permissions:
+      # Lets crates-io-auth-action mint a short-lived OIDC token at
+      # publish time, scoped to this repo + workflow. No long-lived
+      # secret to rotate, and nothing to expire.
+      id-token: write
     steps:
       - uses: actions/checkout@v6
 
@@ -109,10 +114,13 @@ jobs:
           name: ananthb
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
       - name: Publish ht32-panel-hw
         run: nix develop -c cargo publish -p ht32-panel-hw
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Wait for crates.io indexing
         run: sleep 30
@@ -120,7 +128,7 @@ jobs:
       - name: Publish ht32-panel-client
         run: nix develop -c cargo publish -p ht32-panel-client
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Wait for crates.io indexing
         run: sleep 30
@@ -128,14 +136,14 @@ jobs:
       - name: Publish ht32-panel-daemon
         run: nix develop -c cargo publish -p ht32-panel-daemon
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Publish ht32-panel-cli
         run: nix develop -c cargo publish -p ht32-panel-cli
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Publish ht32-panel-applet
         run: nix develop -c cargo publish -p ht32-panel-applet
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
