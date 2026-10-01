@@ -51,7 +51,7 @@
 or use one of the methods below.</p>
 
 <h2>Requirements</h2>
-<p>The prebuilt x86-64 binaries (deb, rpm, AppImage and tarball) are dynamically
+<p>The prebuilt x86-64 binaries (deb, rpm and tarball) are dynamically
 linked and need:</p>
 <ul>
   <li><strong>glibc 2.39 or newer</strong> &mdash; Ubuntu 24.04+, Debian 13+,
@@ -85,6 +85,9 @@ Run <code>sudo dnf upgrade</code> to receive new versions.</p>
 curl -LO https://github.com/ananthb/ht32-panel/releases/latest/download/ht32-panel-VERSION-x86_64.AppImage
 chmod +x ht32-panel-*-x86_64.AppImage
 ./ht32-panel-*-x86_64.AppImage</code></pre>
+<p>The AppImage holds only the tray applet, statically linked, so it runs on any
+x86-64 distro regardless of its glibc. It still needs the daemon installed from
+one of the packages above.</p>
 
 <h2>Tarball</h2>
 <pre><code class="language-bash"># Download and extract the tarball
