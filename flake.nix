@@ -173,104 +173,49 @@
             tar -czvf $out -C dist .
           '';
 
+          # The applet links only libdbus (ksni) and libc, so a static musl
+          # build runs on any distro regardless of its glibc. The dynamic Nix
+          # build references glibc 2.39 and fails on older LTS releases.
+          ht32-panel-applet-static = pkgs.pkgsStatic.rustPlatform.buildRustPackage (cargoArgs // {
+            pname = "ht32-panel-applet";
+            cargoBuildFlags = [ "-p" "ht32-panel-applet" ];
+            cargoTestFlags = [ "-p" "ht32-panel-applet" ];
+            nativeBuildInputs = [ pkgs.pkg-config ];
+            # x11Support only adds autolaunch, which a tray applet never uses.
+            buildInputs = [ (pkgs.pkgsStatic.dbus.override { x11Support = false; }) ];
+          });
+
           release-appimage = let
-            pkg = self.packages.${system}.default;
-            applet = self.packages.${system}.ht32-panel-applet;
+            applet = self.packages.${system}.ht32-panel-applet-static;
 
             appimageRuntime = pkgs.fetchurl {
               url = "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64";
               hash = "sha256-L8qLRDySUQ8Ug6iD9gBhrQm0a5eLJjHIB82HOkfsJg0=";
             };
-
-            libDeps = with pkgs; [
-              hidapi
-              libusb1
-              udev
-              systemd
-              dbus
-              glib
-              gtk3
-              libappindicator-gtk3
-              pango
-              cairo
-              gdk-pixbuf
-              atk
-              harfbuzz
-              fontconfig
-              freetype
-              libGL
-              xorg.libX11
-              xorg.libXcursor
-              xorg.libXrandr
-              xorg.libXi
-              xorg.libXext
-              xorg.libXrender
-              xorg.libXfixes
-              xorg.libXcomposite
-              xorg.libXdamage
-              xorg.libxcb
-              libxkbcommon
-              wayland
-            ];
           in pkgs.runCommand "ht32-panel-${version}-x86_64.AppImage" {
-            nativeBuildInputs = with pkgs; [ squashfsTools patchelf ];
+            nativeBuildInputs = with pkgs; [ squashfsTools file ];
           } ''
-            # Create AppDir structure
             mkdir -p AppDir/usr/bin
-            mkdir -p AppDir/usr/lib
             mkdir -p AppDir/usr/share/applications
             mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
 
-            # Copy binaries and strip Nix RPATH
-            cp ${pkg}/bin/ht32paneld AppDir/usr/bin/
-            cp ${pkg}/bin/ht32panelctl AppDir/usr/bin/
             cp ${applet}/bin/ht32-panel-applet AppDir/usr/bin/
-            chmod +w AppDir/usr/bin/*
-            # Same /nix/store PT_INTERP problem as the tarball: without this the
-            # AppImage cannot exec on any non-Nix host.
-            for b in AppDir/usr/bin/ht32paneld AppDir/usr/bin/ht32panelctl \
-                     AppDir/usr/bin/ht32-panel-applet; do
-              patchelf --remove-rpath "$b"
-              patchelf --set-interpreter ${fhsInterpreter} "$b"
-            done
-
-            # Bundle shared libraries so the AppImage is self-contained.
-            for dir in ${pkgs.lib.concatStringsSep " " (map (d: "${d}/lib") libDeps)}; do
-              if [ -d "$dir" ]; then
-                for so in "$dir"/*.so "$dir"/*.so.*; do
-                  [ -e "$so" ] || continue
-                  cp -n "$(readlink -f "$so")" "AppDir/usr/lib/$(basename "$so")" 2>/dev/null || true
-                done
-              fi
-            done
+            if ! file AppDir/usr/bin/ht32-panel-applet | grep -q 'static'; then
+              echo "FATAL: applet is not statically linked" >&2
+              exit 1
+            fi
 
             # Desktop file at root (required by AppImage spec)
             cp ${./packaging/org.ht32panel.Daemon.desktop} AppDir/ht32-panel.desktop
-            cp ${./packaging/org.ht32panel.Daemon.desktop} AppDir/usr/share/applications/
+            cp ${./packaging/org.ht32panel.Daemon.desktop} AppDir/usr/share/applications/org.ht32panel.Daemon.desktop
 
             # Icon at root (required by AppImage spec)
             cp ${./packaging/org.ht32panel.Daemon.svg} AppDir/ht32-panel.svg
             cp ${./packaging/org.ht32panel.Daemon.svg} AppDir/usr/share/icons/hicolor/scalable/apps/org.ht32panel.Daemon.svg
             cp ${./packaging/org.ht32panel.Daemon.svg} AppDir/.DirIcon
 
-            # Create AppRun launcher
-            cat > AppDir/AppRun << 'APPRUN'
-#!/bin/bash
-set -e
-SELF=$(readlink -f "$0")
-APPDIR=''${SELF%/*}
+            install -m755 ${./packaging/appimage/AppRun} AppDir/AppRun
 
-export LD_LIBRARY_PATH="''${APPDIR}/usr/lib:''${LD_LIBRARY_PATH}"
-
-# GTK/GLib settings
-export GSETTINGS_SCHEMA_DIR="/usr/share/glib-2.0/schemas:''${GSETTINGS_SCHEMA_DIR}"
-export GDK_PIXBUF_MODULE_FILE="/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
-
-exec "''${APPDIR}/usr/bin/ht32-panel-applet" "$@"
-APPRUN
-            chmod +x AppDir/AppRun
-
-            # Create squashfs
             mksquashfs AppDir appimage.squashfs -root-owned -noappend -comp zstd -quiet -no-progress
 
             # Combine runtime + squashfs to create AppImage
